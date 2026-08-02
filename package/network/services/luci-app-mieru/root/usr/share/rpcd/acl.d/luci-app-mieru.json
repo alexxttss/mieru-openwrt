@@ -1,0 +1,23 @@
+{
+	"luci-app-mieru": {
+		"description": "Grant access to Mieru Client configuration and status",
+		"read": {
+			"ubus": {
+				"uci": [ "get" ],
+				"luci.mieru": [ "getStatus", "pingServer", "tcpConnect", "validateConfig", "testSocks5", "readLog", "getBackups", "exportBackup" ],
+				"service": [ "list" ],
+				"rc": [ "list" ],
+				"luci": [ "getProcessList" ]
+			},
+			"uci": [ "mieru" ]
+		},
+		"write": {
+			"ubus": {
+				"uci": [ "set", "commit" ],
+				"luci.mieru": [ "clearLog", "importBackup", "confirmRestore", "deleteBackup", "restoreBackup", "resetConfig", "importJson", "confirmImportJson", "createManualBackup" ],
+				"rc": [ "init" ]
+			},
+			"uci": [ "mieru" ]
+		}
+	}
+}

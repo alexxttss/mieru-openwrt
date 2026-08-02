@@ -1,0 +1,354 @@
+#!/usr/bin/ucode
+'use strict';
+
+import { cursor } from 'uci';
+import { popen, open, glob } from 'fs';
+
+const STATUS_FILE = '/var/run/mieru_status.json';
+
+function get_config() {
+	const uci = cursor();
+	uci.load("mieru");
+	const enabled = uci.get("mieru", "main", "enabled") == "1";
+	const server = uci.get("mieru", "main", "server");
+	const port = uci.get("mieru", "main", "port");
+	const socks5_port = uci.get("mieru", "main", "socks5_port") ?? "1080";
+	const monitor_interval = +(uci.get("mieru", "main", "monitor_interval") ?? "10");
+	
+	let test_port = port;
+	if (port && index(port, '-') != -1) {
+		test_port = split(port, '-')[0];
+	}
+	
+	return { enabled, server, port: test_port, socks5_port, monitor_interval };
+}
+
+function time_str() {
+	const p = popen('date "+%Y-%m-%d %H:%M:%S"');
+	const res = p ? trim(p.read('all')) : '';
+	p?.close();
+	return res;
+}
+
+function read_file(path) {
+	const f = open(path, 'r');
+	if (!f) return null;
+	const content = f.read('all');
+	f.close();
+	return content;
+}
+
+function write_file(path, content) {
+	const f = open(path, 'w');
+	if (!f) return false;
+	f.write(content);
+	f.close();
+	return true;
+}
+
+// CPU tracking helpers
+function get_system_cpu_time() {
+	const f = open('/proc/stat', 'r');
+	if (!f) return 0;
+	const first_line = f.read('line');
+	f.close();
+	const parts = split(trim(first_line), /\s+/);
+	let total = 0;
+	for (let i = 1; i < length(parts); i++) {
+		total += +parts[i];
+	}
+	return total;
+}
+
+function get_process_cpu_time(pid) {
+	const f = open(`/proc/${pid}/stat`, 'r');
+	if (!f) return 0;
+	const content = f.read('all');
+	f.close();
+	const parts = split(trim(content), ' ');
+	if (length(parts) < 15) return 0;
+	return (+parts[13]) + (+parts[14]);
+}
+
+function get_mieru_pid() {
+	for (let p in glob('/proc/[0-9]*')) {
+		let cmd = read_file(`${p}/cmdline`);
+		if (cmd && index(cmd, 'mieru\x00run') != -1) {
+			let pid = match(p, /\/proc\/([0-9]+)/)?.[1];
+			return pid ? +pid : null;
+		}
+	}
+	return null;
+}
+
+let state = {
+	status: 'Offline',
+	latency: null,
+	latency_min: null,
+	latency_max: null,
+	latency_avg: null,
+	last_success: '-',
+	last_reconnect: '-',
+	reconnect_count: 0,
+	disconnect_reason: 'Not started',
+	last_error: '-',
+	connection_uptime: 0,
+	latency_history: [],
+	
+	// Statistics
+	pid: null,
+	memory: 0.0,
+	cpu: 0.0,
+	socks5: '-',
+	server: '-',
+	active_connections: 0,
+	rx_bytes: 0,
+	tx_bytes: 0,
+	rx_speed: 0.0,
+	tx_speed: 0.0,
+	rx_speed_avg: 0.0,
+	tx_speed_avg: 0.0,
+	
+	// Self monitoring
+	monitor_cpu: 0.0,
+	monitor_mem: 0.0,
+	shell_command_count: 0
+};
+
+// Load existing state if any (to survive monitor restart)
+try {
+	const content = read_file(STATUS_FILE);
+	if (content) {
+		const parsed = json(content);
+		if (parsed) {
+			state = parsed;
+		}
+	}
+} catch (e) {}
+
+// CPU calculation state
+let prev_sys_time = 0;
+let prev_proc_time = 0;
+let prev_self_proc_time = 0;
+
+// Speed calculation state
+let prev_rx_bytes = 0;
+let prev_tx_bytes = 0;
+
+while (true) {
+	const cfg = get_config();
+	
+	// If disabled or interval is 0, sleep and do nothing
+	if (cfg.monitor_interval == 0 || !cfg.enabled || !cfg.server) {
+		state.status = 'Offline';
+		state.latency = null;
+		state.disconnect_reason = 'Disabled';
+		state.connection_uptime = 0;
+		write_file(STATUS_FILE, sprintf("%J", state));
+		system("sleep 10");
+		continue;
+	}
+
+	state.socks5 = '0.0.0.0:' + cfg.socks5_port;
+	state.server = cfg.server + ':' + cfg.port;
+
+	// Track shell command execution counts
+	let shell_runs = 0;
+
+	// 1. Process CPU/Memory & Metrics Check
+	const pid = get_mieru_pid();
+	state.pid = pid;
+	
+	let cur_sys_time = get_system_cpu_time();
+	let cur_proc_time = pid ? get_process_cpu_time(pid) : 0;
+	let cur_self_proc_time = get_process_cpu_time('self');
+
+	if (pid) {
+		// Memory (VmRSS)
+		const status_content = read_file(`/proc/${pid}/status`);
+		if (status_content) {
+			const m = match(status_content, /VmRSS:\s+([0-9]+)\s+kB/);
+			if (m) {
+				state.memory = int((+m[1] / 1024) * 10 + 0.5) / 10;
+			}
+		}
+
+		// CPU
+		if (prev_sys_time > 0 && cur_sys_time > prev_sys_time) {
+			const sys_diff = cur_sys_time - prev_sys_time;
+			const proc_diff = cur_proc_time - prev_proc_time;
+			const cpu_pct = (proc_diff / sys_diff) * 100;
+			state.cpu = int(cpu_pct * 10 + 0.5) / 10;
+			
+			const self_diff = cur_self_proc_time - prev_self_proc_time;
+			const self_cpu_pct = (self_diff / sys_diff) * 100;
+			state.monitor_cpu = int(self_cpu_pct * 100 + 0.5) / 100;
+		}
+		
+		// Self memory
+		const self_status = read_file('/proc/self/status');
+		if (self_status) {
+			const m = match(self_status, /VmRSS:\s+([0-9]+)\s+kB/);
+			if (m) {
+				state.monitor_mem = int((+m[1] / 1024) * 10 + 0.5) / 10;
+			}
+		}
+
+		// Fetch traffic/connection metrics
+		const metrics_cmd = "export HOME=/root; /usr/bin/mieru get metrics 2>/dev/null";
+		const p_met = popen(metrics_cmd);
+		shell_runs++;
+		
+		const met_out = p_met ? p_met.read('all') : '';
+		p_met?.close();
+		
+		if (met_out) {
+			let m_data = null;
+			try {
+				m_data = json(met_out);
+			} catch (e) {}
+			if (m_data) {
+				// Connections
+				state.active_connections = m_data.connections?.CurrEstablished ?? 0;
+				
+				// Traffic
+				const rx = m_data.traffic?.DownloadBytes ?? 0;
+				const tx = m_data.traffic?.UploadBytes ?? 0;
+				
+				state.rx_bytes = rx;
+				state.tx_bytes = tx;
+				
+				// Speed
+				if (prev_rx_bytes > 0 && rx >= prev_rx_bytes) {
+					state.rx_speed = int((rx - prev_rx_bytes) / cfg.monitor_interval);
+					state.tx_speed = int((tx - prev_tx_bytes) / cfg.monitor_interval);
+				}
+				prev_rx_bytes = rx;
+				prev_tx_bytes = tx;
+			}
+		}
+	} else {
+		state.memory = 0.0;
+		state.cpu = 0.0;
+		state.active_connections = 0;
+		state.rx_speed = 0.0;
+		state.tx_speed = 0.0;
+	}
+
+	prev_sys_time = cur_sys_time;
+	prev_proc_time = cur_proc_time;
+	prev_self_proc_time = cur_self_proc_time;
+
+	// 2. Connectivity tests
+	const curl_cmd = `curl -s -w "%{time_starttransfer}" -o /dev/null --socks5-hostname 127.0.0.1:${cfg.socks5_port} -m 5 http://connectivitycheck.gstatic.com/generate_204 2>/tmp/mieru_curl_err.txt`;
+	const p_curl = popen(curl_cmd);
+	shell_runs++;
+	
+	const curl_time_str = p_curl ? trim(p_curl.read('all')) : '0.000';
+	const curl_code = p_curl ? p_curl.close() : -1;
+	
+	let cur_latency = null;
+	let cur_status = 'Offline';
+	let cur_error = '-';
+	
+	if (curl_code == 0) {
+		const t = +curl_time_str;
+		cur_latency = int(t * 1000 + 0.5);
+		cur_status = 'Online';
+	} else {
+		cur_error = trim(read_file('/tmp/mieru_curl_err.txt') ?? 'SOCKS5 connection failed');
+		if (length(cur_error) > 100) {
+			cur_error = substr(cur_error, 0, 100) + '...';
+		}
+		
+		const tcp_cmd = `curl -s -w "%{time_connect}" -o /dev/null --connect-timeout 2 -m 3 http://${cfg.server}:${cfg.port}`;
+		const p_tcp = popen(tcp_cmd);
+		shell_runs++;
+		
+		const tcp_time_str = p_tcp ? trim(p_tcp.read('all')) : '0.000';
+		p_tcp?.close();
+		
+		const tcp_time = +tcp_time_str;
+		if (tcp_time > 0) {
+			cur_status = 'Degraded';
+			cur_latency = int(tcp_time * 1000 + 0.5);
+		} else {
+			const ping_cmd = `ping -c 1 -W 2 ${cfg.server}`;
+			const p_ping = popen(ping_cmd);
+			shell_runs++;
+			
+			const ping_out = p_ping ? p_ping.read('all') : '';
+			const ping_code = p_ping ? p_ping.close() : -1;
+			
+			if (ping_code == 0) {
+				cur_status = 'Degraded';
+				const m = match(ping_out, /time=([0-9.]+)/);
+				if (m) {
+					cur_latency = int((+m[1]) + 0.5);
+				}
+			} else {
+				cur_status = 'Offline';
+			}
+		}
+	}
+	
+	// Update connection state
+	const prev_status = state.status;
+	state.status = cur_status;
+	state.latency = cur_latency;
+	
+	if (cur_status == 'Online') {
+		state.connection_uptime = (prev_status == 'Online') ? (state.connection_uptime + cfg.monitor_interval) : cfg.monitor_interval;
+		state.last_success = time_str();
+		if (prev_status != 'Online') {
+			state.last_reconnect = time_str();
+			state.reconnect_count++;
+		}
+		state.disconnect_reason = '-';
+	} else {
+		state.connection_uptime = 0;
+		if (prev_status == 'Online') {
+			state.disconnect_reason = cur_status == 'Degraded' ? 'Degraded performance / proxy fail' : 'Server unreachable';
+		}
+		if (cur_error != '-') {
+			state.last_error = cur_error;
+		}
+	}
+	
+	// Latency min, max, avg & history
+	push(state.latency_history, cur_latency);
+	if (length(state.latency_history) > 360) {
+		shift(state.latency_history);
+	}
+	
+	let lat_sum = 0;
+	let lat_count = 0;
+	let l_min = null;
+	let l_max = null;
+	
+	for (let val in state.latency_history) {
+		if (val === null) continue;
+		lat_sum += val;
+		lat_count++;
+		if (l_min === null || val < l_min) l_min = val;
+		if (l_max === null || val > l_max) l_max = val;
+	}
+	
+	state.latency_min = l_min;
+	state.latency_max = l_max;
+	state.latency_avg = lat_count > 0 ? int(lat_sum / lat_count + 0.5) : null;
+	
+	// Average RX / TX Speed
+	if (state.connection_uptime > 0) {
+		state.rx_speed_avg = int(state.rx_bytes / state.connection_uptime);
+		state.tx_speed_avg = int(state.tx_bytes / state.connection_uptime);
+	} else {
+		state.rx_speed_avg = 0.0;
+		state.tx_speed_avg = 0.0;
+	}
+
+	state.shell_command_count += shell_runs;
+
+	write_file(STATUS_FILE, sprintf("%J", state));
+	system(`sleep ${cfg.monitor_interval}`);
+}

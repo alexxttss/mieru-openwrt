@@ -1,0 +1,529 @@
+// Copyright 2026 Antigravity
+// Licensed to the public under the Apache License 2.0.
+
+'use strict';
+
+import { cursor } from 'uci';
+import { popen, open, readfile, glob, stat } from 'fs';
+
+function shellquote(s) {
+	return `'${replace(s ?? '', "'", "'\\''")}'`;
+}
+
+function get_sysinfo() {
+	let model = 'Unknown Device';
+	let f = open('/tmp/sysinfo/model', 'r');
+	if (f) {
+		model = trim(f.read('all'));
+		f.close();
+	}
+	
+	let release = 'Unknown';
+	f = open('/etc/openwrt_release', 'r');
+	if (f) {
+		for (let line = f.read('line'); length(line); line = f.read('line')) {
+			let m = match(line, /DISTRIB_RELEASE='([^']+)'/);
+			if (m) {
+				release = m[1];
+				break;
+			}
+		}
+		f.close();
+	}
+	
+	return { model, release };
+}
+
+function get_pkg_version() {
+	let p = popen('apk info -v luci-app-mieru');
+	let out = p ? trim(p.read('all')) : '';
+	p?.close();
+	let m = match(out, /luci-app-mieru-(.+)/);
+	return m ? m[1] : '0.260718.25937';
+}
+
+function get_mieru_version() {
+	let mieru_ver = 'Unknown';
+	let p = popen('HOME=/root timeout 2 /usr/bin/mieru version 2>/dev/null');
+	if (p) {
+		let out = p.read('all');
+		let m = match(out, /([0-9]+\.[0-9]+\.[0-9]+)/);
+		if (m) mieru_ver = m[1];
+		p.close();
+	}
+	return mieru_ver;
+}
+
+function write_file(path, content) {
+	const f = open(path, 'w');
+	if (!f) return false;
+	f.write(content);
+	f.close();
+	return true;
+}
+
+function time_str(ts) {
+	const cmd = ts ? `date -d @${ts} "+%Y-%m-%d %H:%M:%S"` : 'date "+%Y-%m-%d %H:%M:%S"';
+	const p = popen(cmd);
+	const res = p ? trim(p.read('all')) : '';
+	p?.close();
+	return res;
+}
+
+
+function clean_backups(limit) {
+	const files = glob("/etc/mieru_backups/backup_*.tar.gz");
+	if (length(files) <= limit) return;
+	sort(files);
+	const to_delete = length(files) - limit;
+	for (let i = 0; i < to_delete; i++) {
+		const filepath = files[i];
+		const jsonpath = replace(filepath, /\.tar\.gz$/, '.json');
+		system(`rm -f ${shellquote(filepath)} ${shellquote(jsonpath)}`);
+	}
+}
+
+function create_backup(comment) {
+	system("mkdir -p /etc/mieru_backups");
+	const timestamp = time();
+	const backup_tar = `/etc/mieru_backups/backup_${timestamp}.tar.gz`;
+	const backup_json = `/etc/mieru_backups/backup_${timestamp}.json`;
+	
+	// Create backup archive
+	system("rm -rf /tmp/mieru_bk && mkdir -p /tmp/mieru_bk");
+	system("cp /etc/config/mieru /tmp/mieru_bk/ 2>/dev/null");
+	system("cp /var/etc/mieru_client_config.json /tmp/mieru_bk/ 2>/dev/null");
+	system("cp /var/run/mieru_status.json /tmp/mieru_bk/ 2>/dev/null");
+	system(`tar -czf ${backup_tar} -C /tmp/mieru_bk .`);
+	system("rm -rf /tmp/mieru_bk");
+	
+	const sys = get_sysinfo();
+	const pkg_ver = get_pkg_version();
+	const mieru_ver = get_mieru_version();
+	
+	const meta = {
+		timestamp: timestamp,
+		date: time_str(timestamp),
+		size: stat(backup_tar)?.size ?? 0,
+		mieru_version: mieru_ver,
+		package_version: pkg_ver,
+		openwrt_version: sys.release,
+		device_name: sys.model,
+		comment: comment ?? "Manual backup"
+	};
+	
+	write_file(backup_json, sprintf("%J", meta));
+	
+	// Load limit from UCI
+	const uci = cursor();
+	uci.load("mieru");
+	const limit = +(uci.get("mieru", "main", "auto_backup_limit") ?? "5");
+	clean_backups(limit);
+}
+
+
+function parse_json_config(content) {
+	const parsed = json(content);
+	if (!parsed) return { error: "Invalid JSON syntax" };
+	
+	let server = null;
+	let port = null;
+	let username = null;
+	let password = null;
+	let protocol = 'TCP';
+	let socks5_port = 1080;
+	let mtu = 1400;
+	
+	// Mieru format
+	if (parsed.profiles && length(parsed.profiles) > 0) {
+		const prof = parsed.profiles[0];
+		socks5_port = parsed.socks5Port ?? 1080;
+		mtu = prof.mtu ?? 1400;
+		username = prof.user?.name;
+		password = prof.user?.password;
+		
+		if (prof.servers && length(prof.servers) > 0) {
+			const srv = prof.servers[0];
+			server = srv.ipAddress;
+			if (srv.portBindings && length(srv.portBindings) > 0) {
+				port = srv.portBindings[0].port;
+				protocol = srv.portBindings[0].protocol ?? 'TCP';
+			}
+		}
+	}
+	// Sing-Box outbound format
+	else if (parsed.outbounds && length(parsed.outbounds) > 0) {
+		for (let ob in parsed.outbounds) {
+			if (ob.type == 'mieru') {
+				server = ob.server;
+				port = ob.server_port;
+				username = ob.username;
+				password = ob.password;
+				protocol = ob.transport ?? 'TCP';
+				break;
+			}
+		}
+	}
+	
+	if (!server || !port || !username || !password) {
+		return { error: "Could not find Mieru configuration parameters in the JSON" };
+	}
+	
+	return { server, port, username, password, protocol, socks5_port, mtu };
+}
+
+const methods = {
+	getStatus: {
+		call: function() {
+			let status = null;
+			try {
+				const content = readfile('/var/run/mieru_status.json');
+				if (content) {
+					status = json(content);
+				}
+			} catch (e) {}
+
+			let running = false;
+			let pid = status?.pid;
+			let uptime = 0;
+			let memory = 0;
+			if (pid) {
+				const proc_stat = stat(`/proc/${pid}`);
+				if (proc_stat) {
+					running = true;
+					uptime = time() - proc_stat.mtime;
+					
+					const self_status = readfile(`/proc/${pid}/status`);
+					if (self_status) {
+						const m = match(self_status, /VmRSS:\s+([0-9]+)\s+kB/);
+						if (m) {
+							memory = +m[1] * 1024;
+						}
+					}
+				}
+			}
+
+			return {
+				status: status,
+				process: {
+					running: running,
+					pid: pid ?? '-',
+					uptime: uptime,
+					memory: memory
+				}
+			};
+		}
+	},
+
+	pingServer: {
+		args: { server: 'string' },
+		call: function(req) {
+			const s = req.args?.server;
+			if (!s) return { error: 'Server IP/Host missing' };
+			const p = popen(`ping -c 4 ${shellquote(s)} 2>&1`);
+			const out = p ? p.read('all') : 'Failed to execute ping';
+			p?.close();
+			return { output: out };
+		}
+	},
+
+	tcpConnect: {
+		args: { server: 'string', port: 'string' },
+		call: function(req) {
+			const s = req.args?.server;
+			const p = req.args?.port;
+			if (!s || !p) return { error: 'Server or Port missing' };
+			
+			const cmd = `curl -s -o /dev/null -w "%{time_connect}" --connect-timeout 2 -m 3 http://${shellquote(s)}:${+p} 2>&1; echo "EXIT_CODE:$?"`;
+			const proc = popen(cmd);
+			let out = '';
+			if (proc) {
+				out = proc.read('all');
+				proc.close();
+			}
+			
+			const m_time = match(out, /^([0-9.]+)/);
+			const m_exit = match(out, /EXIT_CODE:([0-9]+)/);
+			
+			const time_connect = m_time ? +m_time[1] : 0;
+			const exit_code = m_exit ? +m_exit[1] : 28;
+			const rtt_ms = int(time_connect * 1000 + 0.5);
+			
+			let err = '';
+			let success = false;
+			if (time_connect > 0) {
+				success = true;
+			} else {
+				if (exit_code == 6) {
+					err = 'DNS error';
+				} else if (exit_code == 7) {
+					err = 'Connection refused';
+				} else {
+					err = 'Timeout / Host unreachable';
+				}
+			}
+			
+			return {
+				success: success,
+				rtt: rtt_ms,
+				error: err
+			};
+		}
+	},
+
+	validateConfig: {
+		call: function() {
+			const content = readfile('/var/etc/mieru_client_config.json');
+			if (!content) return { valid: false, error: 'Config file not found' };
+			const parsed = json(content);
+			if (!parsed) return { valid: false, error: 'Invalid JSON format' };
+			return { valid: true, config: parsed };
+		}
+	},
+
+	testSocks5: {
+		args: { port: 'string' },
+		call: function(req) {
+			const p = req.args?.port ?? '1080';
+			const cmd = `curl -v --socks5-hostname 127.0.0.1:${p} -m 5 https://google.com/generate_204 2>&1`;
+			const proc = popen(cmd);
+			const out = proc ? proc.read('all') : 'Failed to run curl';
+			const code = proc ? proc.close() : -1;
+			return { success: (code == 0), output: out };
+		}
+	},
+
+	readLog: {
+		call: function() {
+			const p = popen('logread -e mieru | tail -n 200');
+			const out = p ? p.read('all') : 'Failed to read logs';
+			p?.close();
+			return { log: out };
+		}
+	},
+
+	clearLog: {
+		call: function() {
+			const code = system('logread -c');
+			return { success: (code == 0) };
+		}
+	},
+
+	// --- Backup & Restore Methods ---
+	exportBackup: {
+		call: function() {
+			system("rm -rf /tmp/mieru_backup && mkdir -p /tmp/mieru_backup");
+			system("cp /etc/config/mieru /tmp/mieru_backup/ 2>/dev/null");
+			system("cp /var/etc/mieru_client_config.json /tmp/mieru_backup/ 2>/dev/null");
+			system("cp /var/run/mieru_status.json /tmp/mieru_backup/ 2>/dev/null");
+			
+			const code = system("tar -czf /tmp/mieru_backup.tar.gz -C /tmp mieru_backup");
+			if (code != 0) return { error: "Failed to create tar.gz archive" };
+			
+			const p = popen("base64 /tmp/mieru_backup.tar.gz");
+			const b64 = p ? p.read('all') : null;
+			p?.close();
+			
+			system("rm -rf /tmp/mieru_backup /tmp/mieru_backup.tar.gz");
+			if (!b64) return { error: "Failed to read backup archive" };
+			return { data: trim(b64) };
+		}
+	},
+
+	importBackup: {
+		args: { data: 'string', comment: 'string' },
+		call: function(req) {
+			const b64 = req.args?.data;
+			if (!b64) return { error: "No data provided" };
+			
+			write_file("/tmp/mieru_restore_decoded.tar.gz.b64", b64);
+			system("base64 -d /tmp/mieru_restore_decoded.tar.gz.b64 > /tmp/mieru_restore_decoded.tar.gz");
+			
+			system("rm -rf /tmp/mieru_restore_extracted && mkdir -p /tmp/mieru_restore_extracted");
+			const code = system("tar -xzf /tmp/mieru_restore_decoded.tar.gz -C /tmp/mieru_restore_extracted");
+			system("rm -f /tmp/mieru_restore_decoded.tar.gz.b64 /tmp/mieru_restore_decoded.tar.gz");
+			
+			if (code != 0) return { error: "Invalid backup archive format" };
+			
+			// Validate files
+			const has_uci = stat("/tmp/mieru_restore_extracted/mieru_backup/mieru") != null;
+			if (!has_uci) return { error: "Archive does not contain UCI configuration file" };
+			
+			// Read values for preview
+			const uci = cursor();
+			uci.load("mieru");
+			
+			const orig_enabled = uci.get("mieru", "main", "enabled");
+			const orig_server = uci.get("mieru", "main", "server");
+			const orig_port = uci.get("mieru", "main", "port");
+			const orig_user = uci.get("mieru", "main", "username");
+			const orig_socks = uci.get("mieru", "main", "socks5_port");
+			
+			// Load imported UCI
+			const uci_imp = cursor("/tmp/mieru_restore_extracted/mieru_backup");
+			uci_imp.load("mieru");
+			const imp_enabled = uci_imp.get("mieru", "main", "enabled");
+			const imp_server = uci_imp.get("mieru", "main", "server");
+			const imp_port = uci_imp.get("mieru", "main", "port");
+			const imp_user = uci_imp.get("mieru", "main", "username");
+			const imp_socks = uci_imp.get("mieru", "main", "socks5_port");
+			
+			return {
+				preview: {
+					enabled: { old: orig_enabled, new: imp_enabled },
+					server: { old: orig_server, new: imp_server },
+					port: { old: orig_port, new: imp_port },
+					username: { old: orig_user, new: imp_user },
+					socks5_port: { old: orig_socks, new: imp_socks }
+				}
+			};
+		}
+	},
+
+	confirmRestore: {
+		args: { auto_backup: 'boolean' },
+		call: function(req) {
+			if (req.args?.auto_backup) {
+				create_backup("Auto-backup before restore");
+			}
+			
+			// Copy files
+			system("cp /tmp/mieru_restore_extracted/mieru_backup/mieru /etc/config/mieru");
+			system("rm -rf /tmp/mieru_restore_extracted");
+			
+			// Restart service
+			system("/etc/init.d/mieru restart");
+			return { success: true };
+		}
+	},
+
+	getBackups: {
+		call: function() {
+			const list = [];
+			for (let p in glob("/etc/mieru_backups/backup_*.json")) {
+				const content = readfile(p);
+				if (content) {
+					const obj = json(content);
+					if (obj) push(list, obj);
+				}
+			}
+			// Sort backups descending by timestamp
+			sort(list, (a, b) => b.timestamp - a.timestamp);
+			return { backups: list };
+		}
+	},
+
+	deleteBackup: {
+		args: { timestamp: 'string' },
+		call: function(req) {
+			const ts = req.args?.timestamp;
+			if (!ts) return { error: "No timestamp provided" };
+			system(`rm -f /etc/mieru_backups/backup_${+ts}.tar.gz /etc/mieru_backups/backup_${+ts}.json`);
+			return { success: true };
+		}
+	},
+
+	restoreBackup: {
+		args: { timestamp: 'string' },
+		call: function(req) {
+			const ts = req.args?.timestamp;
+			if (!ts) return { error: "No timestamp provided" };
+			
+			const backup_tar = `/etc/mieru_backups/backup_${+ts}.tar.gz`;
+			if (stat(backup_tar) == null) return { error: "Backup file not found" };
+			
+			// Create auto backup of current config
+			create_backup("Auto-backup before rollback");
+			
+			// Extract backup
+			system("rm -rf /tmp/mieru_roll && mkdir -p /tmp/mieru_roll");
+			system(`tar -xzf ${backup_tar} -C /tmp/mieru_roll`);
+			system("cp /tmp/mieru_roll/mieru /etc/config/mieru");
+			system("rm -rf /tmp/mieru_roll");
+			
+			system("/etc/init.d/mieru restart");
+			return { success: true };
+		}
+	},
+
+	resetConfig: {
+		call: function() {
+			// Stop Mieru
+			system("/etc/init.d/mieru stop");
+			system("rm -f /etc/config/mieru /var/etc/mieru_client_config.json /var/run/mieru_status.json");
+			
+			// Recreate default empty config
+			write_file("/etc/config/mieru", "\nconfig main\n\toption enabled '0'\n\toption monitor_interval '10'\n\toption auto_backup '1'\n\toption auto_backup_limit '5'\n");
+			return { success: true };
+		}
+	},
+
+	importJson: {
+		args: { content: 'string' },
+		call: function(req) {
+			const c = req.args?.content;
+			if (!c) return { error: "No content provided" };
+			
+			const res = parse_json_config(c);
+			if (res.error) return res;
+			
+			// Diff
+			const uci = cursor();
+			uci.load("mieru");
+			
+			const diff = {
+				server: { old: uci.get("mieru", "main", "server"), new: res.server },
+				port: { old: uci.get("mieru", "main", "port"), new: res.port },
+				username: { old: uci.get("mieru", "main", "username"), new: res.username },
+				password: { old: uci.get("mieru", "main", "password") ? '******' : '', new: '******' },
+				protocol: { old: uci.get("mieru", "main", "protocol"), new: res.protocol },
+				socks5_port: { old: uci.get("mieru", "main", "socks5_port"), new: res.socks5_port },
+				mtu: { old: uci.get("mieru", "main", "mtu"), new: res.mtu }
+			};
+			
+			// Save parsed temp config
+			write_file("/tmp/mieru_json_parsed.json", sprintf("%J", res));
+			
+			return { preview: diff };
+		}
+	},
+
+	confirmImportJson: {
+		args: { auto_backup: 'boolean' },
+		call: function(req) {
+			const content = readfile("/tmp/mieru_json_parsed.json");
+			if (!content) return { error: "Parsed JSON not found" };
+			const cfg = json(content);
+			system("rm -f /tmp/mieru_json_parsed.json");
+			
+			if (req.args?.auto_backup) {
+				create_backup("Auto-backup before JSON import");
+			}
+			
+			const uci = cursor();
+			uci.load("mieru");
+			uci.set("mieru", "main", "enabled", "1");
+			uci.set("mieru", "main", "server", cfg.server);
+			uci.set("mieru", "main", "port", "" + cfg.port);
+			uci.set("mieru", "main", "username", cfg.username);
+			uci.set("mieru", "main", "password", cfg.password);
+			uci.set("mieru", "main", "protocol", cfg.protocol);
+			uci.set("mieru", "main", "socks5_port", "" + cfg.socks5_port);
+			uci.set("mieru", "main", "mtu", "" + cfg.mtu);
+			uci.commit("mieru");
+			
+			system("/etc/init.d/mieru restart");
+			return { success: true };
+		}
+	},
+
+	createManualBackup: {
+		args: { comment: 'string' },
+		call: function(req) {
+			create_backup(req.args?.comment);
+			return { success: true };
+		}
+	}
+};
+
+return { 'luci.mieru': methods };

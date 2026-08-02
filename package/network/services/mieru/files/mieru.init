@@ -1,0 +1,116 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+USE_PROCD=1
+
+JSON_FILE="/var/etc/mieru_client_config.json"
+
+generate_json_config() {
+    local enabled server port username password protocol socks5_port mtu log_level
+    
+    config_get_bool enabled "main" "enabled" "0"
+    [ "$enabled" -eq 0 ] && return 1
+    
+    config_get server "main" "server"
+    config_get port "main" "port"
+    config_get username "main" "username"
+    config_get password "main" "password"
+    config_get protocol "main" "protocol" "TCP"
+    config_get socks5_port "main" "socks5_port" "1080"
+    config_get mtu "main" "mtu" "1400"
+    config_get log_level "main" "log_level" "ERROR"
+    
+    if [ -z "$server" ] || [ -z "$port" ] || [ -z "$username" ] || [ -z "$password" ]; then
+        echo "Error: Mieru configuration is missing mandatory fields (server, port, username, password)"
+        return 1
+    fi
+    
+    . /usr/share/libubox/jshn.sh
+    
+    json_init
+    json_add_string "activeProfile" "default"
+    json_add_int "socks5Port" "$socks5_port"
+    json_add_boolean "socks5ListenLAN" 1
+    json_add_int "rpcPort" 8964
+    json_add_string "loggingLevel" "$log_level"
+    
+    json_add_array "profiles"
+        json_add_object ""
+            json_add_string "profileName" "default"
+            json_add_int "mtu" "$mtu"
+            json_add_object "user"
+                json_add_string "name" "$username"
+                json_add_string "password" "$password"
+            json_close_object
+            json_add_object "multiplexing"
+                json_add_string "level" "MULTIPLEXING_LOW"
+            json_close_object
+            json_add_array "servers"
+                json_add_object ""
+                    json_add_string "ipAddress" "$server"
+                    json_add_array "portBindings"
+                        json_add_object ""
+                            if echo "$port" | grep -q "-"; then
+                                json_add_string "portRange" "$port"
+                            else
+                                json_add_int "port" "$port"
+                            fi
+                            json_add_string "protocol" "$protocol"
+                        json_close_object
+                    json_close_array
+                json_close_object
+            json_close_array
+        json_close_object
+    json_close_array
+    
+    mkdir -p "$(dirname "$JSON_FILE")"
+    json_dump > "$JSON_FILE"
+    return 0
+}
+
+start_service() {
+    export HOME=/root
+    config_load "mieru"
+    
+    generate_json_config || return
+    
+    # 1. Apply config
+    /usr/bin/mieru apply config "$JSON_FILE"
+    
+    # 2. Start Mieru daemon
+    procd_open_instance "daemon"
+    procd_set_param env HOME=/root
+    
+    # We use a monitoring loop because 'mieru start' daemonizes the process in the background.
+    # The loop runs 'mieru start' if the daemon is stopped, and polls its status.
+    # If the daemon crashes, the loop exits, and procd automatically respawns it.
+    procd_set_param command /bin/sh -c '
+        /usr/bin/mieru start
+        while /usr/bin/mieru status >/dev/null 2>&1; do
+            sleep 5
+        done
+    '
+    procd_set_param respawn
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+
+    # 3. Start Mieru connection monitor
+    procd_open_instance "monitor"
+    procd_set_param command /usr/bin/mieru-monitor
+    procd_set_param respawn
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+}
+
+stop_service() {
+    export HOME=/root
+    /usr/bin/mieru stop
+    rm -f "$JSON_FILE"
+    rm -f /var/run/mieru_status.json
+}
+
+service_triggers() {
+    procd_add_reload_trigger "mieru"
+}

@@ -1,0 +1,533 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Mieru Client"
+msgstr "Клиент Mieru"
+
+msgid "Secure and fast proxy client utilizing Mieru protocol."
+msgstr "Безопасный и быстрый прокси-клиент, использующий протокол Mieru."
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Server Connection"
+msgstr "Соединение с сервером"
+
+msgid "Latency History (1 Hour)"
+msgstr "История задержки (1 час)"
+
+msgid "Service State"
+msgstr "Состояние службы"
+
+msgid "Connection Uptime"
+msgstr "Время работы соединения"
+
+msgid "Process PID"
+msgstr "PID процесса"
+
+msgid "Reconnections"
+msgstr "Переподключения"
+
+msgid "Process Memory"
+msgstr "Память процесса"
+
+msgid "Last Reconnect"
+msgstr "Последнее переподключение"
+
+msgid "Process Uptime"
+msgstr "Время работы процесса"
+
+msgid "Local SOCKS5 proxy"
+msgstr "Локальный прокси SOCKS5"
+
+msgid "Connected Server"
+msgstr "Подключенный сервер"
+
+msgid "Last Client Error"
+msgstr "Последняя ошибка клиента"
+
+msgid "Start Mieru"
+msgstr "Запустить Mieru"
+
+msgid "Stop Mieru"
+msgstr "Остановить Mieru"
+
+msgid "Restart Mieru"
+msgstr "Перезапустить Mieru"
+
+msgid "General Settings"
+msgstr "Общие настройки"
+
+msgid "Diagnostics"
+msgstr "Диагностика"
+
+msgid "Logs"
+msgstr "Журнал"
+
+msgid "Configuration JSON"
+msgstr "JSON конфигурация"
+
+msgid "Enable"
+msgstr "Включить"
+
+msgid "Enable Mieru client service"
+msgstr "Включить службу клиента Mieru"
+
+msgid "Server"
+msgstr "Сервер"
+
+msgid "Mieru server IP address or hostname"
+msgstr "IP-адрес или хостнейм сервера Mieru"
+
+msgid "Port"
+msgstr "Порт"
+
+msgid "Mieru server port or port range (e.g. 2012 or 2012-2022)"
+msgstr "Порт или диапазон портов сервера Mieru (например, 2012 или 2012-2022)"
+
+msgid "Username"
+msgstr "Имя пользователя"
+
+msgid "Proxy connection username"
+msgstr "Имя пользователя для подключения"
+
+msgid "Password"
+msgstr "Пароль"
+
+msgid "Proxy connection password"
+msgstr "Пароль для подключения"
+
+msgid "Transport"
+msgstr "Транспорт"
+
+msgid "Underlay network protocol"
+msgstr "Протокол транспортного уровня"
+
+msgid "SOCKS5 Port"
+msgstr "Порт SOCKS5"
+
+msgid "Local SOCKS5 proxy port"
+msgstr "Локальный порт SOCKS5 прокси"
+
+msgid "MTU"
+msgstr "MTU"
+
+msgid "Maximum Transmission Unit (1280-1400)"
+msgstr "Максимальный размер пакета (1280-1400)"
+
+msgid "Log Level"
+msgstr "Уровень логирования"
+
+msgid "Logging verbosity"
+msgstr "Детализация логирования"
+
+msgid "Ping Server"
+msgstr "Пинг сервера"
+
+msgid "TCP Connect"
+msgstr "TCP подключение"
+
+msgid "Validate Config"
+msgstr "Проверить конфиг"
+
+msgid "Test SOCKS5"
+msgstr "Тест SOCKS5"
+
+msgid "Refresh"
+msgstr "Обновить"
+
+msgid "Clear Log"
+msgstr "Очистить журнал"
+
+msgid "Download Log"
+msgstr "Скачать журнал"
+
+msgid "Copy to Clipboard"
+msgstr "Копировать в буфер"
+
+msgid "Online"
+msgstr "Online (Подключен)"
+
+msgid "Degraded"
+msgstr "Degraded (Проблемы)"
+
+msgid "Offline"
+msgstr "Offline (Отключен)"
+
+msgid "Stopped"
+msgstr "Остановлен"
+
+msgid "Running"
+msgstr "Запущен"
+
+msgid "No data available"
+msgstr "Данные отсутствуют"
+
+msgid "Loading logs..."
+msgstr "Загрузка журнала..."
+
+msgid "No log entries found."
+msgstr "Записи в журнале не найдены."
+
+msgid "Clear entire system logs?"
+msgstr "Очистить весь системный журнал?"
+
+msgid "System logs cleared."
+msgstr "Системный журнал очищен."
+
+msgid "Loading JSON config..."
+msgstr "Загрузка JSON конфигурации..."
+
+msgid "No active JSON configuration found. Start the service to generate configuration."
+msgstr "Активная конфигурация JSON не найдена. Запустите службу для генерации конфигурации."
+
+msgid "JSON copied to clipboard!"
+msgstr "JSON скопирован в буфер обмена!"
+
+msgid "Mieru Client started."
+msgstr "Клиент Mieru запущен."
+
+msgid "Mieru Client stopped."
+msgstr "Клиент Mieru остановлен."
+
+msgid "Mieru Client restarted."
+msgstr "Клиент Mieru перезапущен."
+
+msgid "Applying configuration changes..."
+msgstr "Применение изменений конфигурации..."
+
+msgid "Configuration successfully applied."
+msgstr "Конфигурация успешно применена."
+
+msgid "Please configure server IP first!"
+msgstr "Пожалуйста, сначала настройте IP сервера!"
+
+msgid "Please configure server and port first!"
+msgstr "Пожалуйста, сначала настройте сервер и порт!"
+
+msgid "Connection successful!"
+msgstr "Подключение успешно!"
+
+msgid "Connection failed/timeout."
+msgstr "Подключение не удалось или истекло время ожидания."
+
+msgid "Configuration is valid!"
+msgstr "Конфигурация верна!"
+
+msgid "Error: "
+msgstr "Ошибка: "
+
+msgid "SOCKS5 proxy test successful!"
+msgstr "Тест SOCKS5 прокси пройден успешно!"
+
+msgid "SOCKS5 proxy test failed."
+msgstr "Тест SOCKS5 прокси провален."
+
+msgid "Select diagnostic tool above to start test...\n"
+msgstr "Выберите диагностический инструмент выше для запуска теста...\n"
+
+msgid "Last Update:"
+msgstr "Последнее обновление:"
+
+msgid "Never"
+msgstr "Никогда"
+
+msgid "Backup & Restore"
+msgstr "Резервное копирование и восстановление"
+
+msgid "Backup Settings"
+msgstr "Настройки резервного копирования"
+
+msgid "Saved Backups"
+msgstr "Сохраненные резервные копии"
+
+msgid "Copy SOCKS5 URL"
+msgstr "Копировать SOCKS5 URL"
+
+msgid "Copy SOCKS5h URL"
+msgstr "Копировать SOCKS5h URL"
+
+msgid "Export UCI Settings"
+msgstr "Экспортировать настройки UCI"
+
+msgid "Export JSON Configuration"
+msgstr "Экспортировать конфигурацию JSON"
+
+msgid "Export Full Backup Archive"
+msgstr "Экспортировать архив резервной копии"
+
+msgid "Upload Backup File"
+msgstr "Загрузить файл резервной копии"
+
+msgid "Create Manual Backup"
+msgstr "Создать резервную копию вручную"
+
+msgid "Restore"
+msgstr "Восстановить"
+
+msgid "Delete"
+msgstr "Удалить"
+
+msgid "Current Speed (RX/TX):"
+msgstr "Текущая скорость (RX/TX):"
+
+msgid "Average Speed (RX/TX):"
+msgstr "Средняя скорость (RX/TX):"
+
+msgid "Active Connections:"
+msgstr "Активные соединения:"
+
+msgid "Shell commands count:"
+msgstr "Количество shell-команд:"
+
+msgid "No backups available."
+msgstr "Нет доступных резервных копий."
+
+msgid "Restore backup from %s? Your current settings will be backed up automatically."
+msgstr "Восстановить резервную копию от %s? Ваши текущие настройки будут автоматически сохранены."
+
+msgid "Configuration restored successfully."
+msgstr "Конфигурация успешно восстановлена."
+
+msgid "Restore failed: "
+msgstr "Ошибка восстановления: "
+
+msgid "Delete backup from %s?"
+msgstr "Удалить резервную копию от %s?"
+
+msgid "Backup deleted."
+msgstr "Резервная копия удалена."
+
+msgid "Import Configuration"
+msgstr "Импортировать конфигурацию"
+
+msgid "No configuration changes detected."
+msgstr "Изменений конфигурации не обнаружено."
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Parameter"
+msgstr "Параметр"
+
+msgid "Current Value"
+msgstr "Текущее значение"
+
+msgid "New Value"
+msgstr "Новое значение"
+
+msgid "Configuration Changes Preview"
+msgstr "Предпросмотр изменений конфигурации"
+
+msgid "Please review the imported configuration changes before confirming:"
+msgstr "Пожалуйста, просмотрите изменения импортируемой конфигурации перед подтверждением:"
+
+msgid "Create backup of current settings before importing"
+msgstr "Создать резервную копию текущих настроек перед импортом"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Confirm & Apply"
+msgstr "Подтвердить и применить"
+
+msgid "Monitor Interval"
+msgstr "Интервал мониторинга"
+
+msgid "Background connection monitoring update interval"
+msgstr "Интервал обновления фонового мониторинга соединения"
+
+msgid "Disabled"
+msgstr "Отключено"
+
+msgid "30 sec"
+msgstr "30 сек"
+
+msgid "10 sec"
+msgstr "10 сек"
+
+msgid "5 sec"
+msgstr "5 сек"
+
+msgid "3 sec"
+msgstr "3 сек"
+
+msgid "Auto Backup"
+msgstr "Автобэкап"
+
+msgid "Automatically create backups before saving/applying"
+msgstr "Автоматически создавать резервные копии перед сохранением/применением"
+
+msgid "Backup Limit"
+msgstr "Лимит бэкапов"
+
+msgid "Maximum number of rolling automatic backups to keep"
+msgstr "Максимальное количество хранящихся автобэкапов"
+
+msgid "Backup comment (e.g. Before manual change)"
+msgstr "Комментарий к бэкапу (например, Перед изменением вручную)"
+
+msgid "Import failed: "
+msgstr "Ошибка импорта: "
+
+msgid "Configuration imported successfully."
+msgstr "Конфигурация успешно импортирована."
+
+msgid "User uploaded archive"
+msgstr "Загруженный пользователем архив"
+
+msgid "Backup restored successfully."
+msgstr "Резервная копия успешно восстановлена."
+
+msgid "Date"
+msgstr "Дата"
+
+msgid "Size"
+msgstr "Размер"
+
+msgid "Mieru Version"
+msgstr "Версия Mieru"
+
+msgid "Package Version"
+msgstr "Версия пакета"
+
+msgid "OpenWrt Version"
+msgstr "Версия OpenWrt"
+
+msgid "Device Name"
+msgstr "Устройство"
+
+msgid "Comment"
+msgstr "Комментарий"
+
+msgid "Actions"
+msgstr "Действия"
+
+msgid "No active JSON configuration found."
+msgstr "Активная JSON конфигурация не найдена."
+
+msgid "Paste Mieru SOCKS5 or Sing-Box JSON configuration here..."
+msgstr "Вставьте сюда JSON конфигурацию Mieru SOCKS5 или Sing-Box..."
+
+msgid "Paste JSON Configuration"
+msgstr "Вставить JSON конфигурацию"
+
+msgid "Validate & Preview"
+msgstr "Проверить и просмотреть"
+
+msgid "Paste JSON"
+msgstr "Вставить JSON"
+
+msgid "Reset Mieru client settings to default? Current configuration will be lost!"
+msgstr "Сбросить настройки клиента Mieru к значениям по умолчанию? Текущая конфигурация будет потеряна!"
+
+msgid "Configuration reset successfully."
+msgstr "Настройки успешно сброшены."
+
+msgid "Reset Settings"
+msgstr "Сбросить настройки"
+
+msgid "Manual backup created."
+msgstr "Резервная копия вручную создана."
+
+msgid "Service State:"
+msgstr "Состояние службы:"
+
+msgid "Connection Uptime:"
+msgstr "Время работы соединения:"
+
+msgid "Process PID:"
+msgstr "PID процесса:"
+
+msgid "Reconnections:"
+msgstr "Переподключения:"
+
+msgid "Process Memory:"
+msgstr "Память процесса:"
+
+msgid "Last Reconnect:"
+msgstr "Последнее переподключение:"
+
+msgid "Process Uptime:"
+msgstr "Время работы процесса:"
+
+msgid "Local SOCKS5 proxy:"
+msgstr "Локальный прокси SOCKS5:"
+
+msgid "Connected Server:"
+msgstr "Подключенный сервер:"
+
+msgid "Last Client Error:"
+msgstr "Последняя ошибка клиента:"
+
+msgid "RTT Latency (Min/Max/Avg):"
+msgstr "RTT задержка (Мин/Макс/Сред):"
+
+msgid "Traffic (RX/TX):"
+msgstr "Трафик (RX/TX):"
+
+msgid "Monitor CPU / RAM:"
+msgstr "Монитор CPU / RAM:"
+
+msgid "SOCKS5 URL copied to clipboard: "
+msgstr "SOCKS5 URL скопирован в буфер обмена: "
+
+msgid "SOCKS5h URL copied to clipboard: "
+msgstr "SOCKS5h URL скопирован в буфер обмена: "
+
+msgid "Automatic backup before settings save"
+msgstr "Автоматический бэкап перед сохранением настроек"
+
+msgid "Not started"
+msgstr "Не запущен"
+
+msgid "Timeout"
+msgstr "Таймаут"
+
+msgid "Upload Backup File"
+msgstr "Загрузить файл резервной копии"
+
+msgid "ms"
+msgstr "мс"
+
+msgid "MB"
+msgstr "МБ"
+
+msgid "SOCKS5 URL успешно скопирован"
+msgstr "✓ SOCKS5 URL успешно скопирован"
+
+msgid "SOCKS5h URL успешно скопирован"
+msgstr "✓ SOCKS5h URL успешно скопирован"
+
+msgid "Ошибка копирования SOCKS5 URL"
+msgstr "✗ Ошибка копирования SOCKS5 URL"
+
+msgid "Ошибка копирования SOCKS5h URL"
+msgstr "✗ Ошибка копирования SOCKS5h URL"
+
+msgid "ICMP Ping failed (ICMP запрещён на сервере)"
+msgstr "ICMP Ping не удался (ICMP запрещён на сервере)"
+
+msgid "ICMP Ping successful"
+msgstr "ICMP Ping успешен"
+
+msgid "TCP соединение установлено"
+msgstr "TCP соединение установлено"
+
+msgid "TCP соединение невозможно"
+msgstr "TCP соединение невозможно"
+
+msgid "Проверка ICMP Ping..."
+msgstr "Проверка ICMP Ping..."
+
+msgid "ICMP отключён на сервере"
+msgstr "ICMP отключён на сервере"
+
+msgid "TCP работает нормально"
+msgstr "TCP работает нормально"
+
+msgid "ICMP Ping также работает"
+msgstr "ICMP Ping также работает"
+
+
+

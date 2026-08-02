@@ -1,0 +1,14 @@
+{
+	"admin/services/mieru": {
+		"title": "Mieru Client",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "mieru"
+		},
+		"depends": {
+			"acl": [ "luci-app-mieru" ],
+			"uci": { "mieru": true }
+		}
+	}
+}
