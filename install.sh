@@ -31,7 +31,7 @@ echo " Repository: github.com/$GITHUB_USER/$GITHUB_REPO"
 echo " Branch:     $GITHUB_BRANCH"
 echo "========================================================="
 
-if [ "$GITHUB_USER" = "alexxttss" ] || [ "$GITHUB_REPO" = "mieru-openwrt" ]; then
+if [ -z "$GITHUB_USER" ] || [ -z "$GITHUB_REPO" ]; then
     echo "ERROR: Please specify your GitHub username and repository name."
     echo "Usage: wget -qO- https://raw.githubusercontent.com/USER/REPO/main/install.sh | sh -s -- USER REPO"
     exit 1
