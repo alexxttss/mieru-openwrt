@@ -122,7 +122,49 @@ function create_backup(comment) {
 }
 
 
+function parse_mieru_url(url) {
+	const parts = split(url, '?');
+	const base = parts[0];
+	const query = parts[1] ?? '';
+	
+	const m = match(base, /^mierus?:\/\/([^:]+):([^@]+)@([^\/]+)$/);
+	if (!m) return { error: "Invalid Mieru URL format" };
+	
+	const username = m[1];
+	const password = m[2];
+	const server = m[3];
+	
+	let port = null;
+	let protocol = 'TCP';
+	let socks5_port = 1080;
+	let mtu = 1400;
+	
+	const pairs = split(query, '&');
+	for (let pair in pairs) {
+		const kv = split(pair, '=');
+		if (length(kv) == 2) {
+			const k = trim(kv[0]);
+			const v = trim(kv[1]);
+			if (k == 'port') port = +v;
+			else if (k == 'protocol') protocol = v;
+			else if (k == 'socks5_port') socks5_port = +v;
+			else if (k == 'mtu') mtu = +v;
+		}
+	}
+	
+	if (!port) {
+		return { error: "Port query parameter is missing in URL" };
+	}
+	
+	return { server, port, username, password, protocol, socks5_port, mtu };
+}
+
 function parse_json_config(content) {
+	content = trim(content ?? '');
+	if (match(content, /^mierus?:\/\//)) {
+		return parse_mieru_url(content);
+	}
+	
 	const parsed = json(content);
 	if (!parsed) return { error: "Invalid JSON syntax" };
 	

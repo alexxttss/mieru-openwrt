@@ -529,5 +529,11 @@ msgstr "TCP работает нормально"
 msgid "ICMP Ping также работает"
 msgstr "ICMP Ping также работает"
 
+msgid "Import JSON or URL Configuration"
+msgstr "Импорт конфигурации JSON или URL"
+
+msgid "Paste Mieru SOCKS5, Sing-Box JSON, or Mieru URL (mierus://...) configuration here..."
+msgstr "Вставьте конфигурацию Mieru SOCKS5, Sing-Box JSON или Mieru URL (mierus://...) сюда..."
+
 
 

@@ -987,10 +987,10 @@ return view.extend({
 						'class': 'btn cbi-button-neutral',
 						'click': function() {
 							// Paste JSON manually
-							const ta = E('textarea', { 'style': 'width:100%; height:150px; font-family:monospace;', 'placeholder': _('Paste Mieru SOCKS5 or Sing-Box JSON configuration here...') });
+							const ta = E('textarea', { 'style': 'width:100%; height:150px; font-family:monospace;', 'placeholder': _('Paste Mieru SOCKS5, Sing-Box JSON, or Mieru URL (mierus://...) configuration here...') });
 							const checkAutoBk = E('input', { 'type': 'checkbox', 'id': 'manual_import_auto_bk', 'checked': true });
 							
-							ui.showModal(_('Paste JSON Configuration'), [
+							ui.showModal(_('Import JSON or URL Configuration'), [
 								ta,
 								E('div', { 'style': 'margin-top:10px;' }, [
 									E('label', {}, [
