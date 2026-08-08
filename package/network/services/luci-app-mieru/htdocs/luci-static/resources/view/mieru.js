@@ -110,8 +110,11 @@ function parseMieruUrl(url) {
 
 	try {
 		const parts = url.split('?');
-		const base = parts[0];
+		let base = parts[0];
 		const query = parts[1] || '';
+
+		// Strip trailing slashes
+		base = base.replace(/\/+$/, '');
 
 		const m = base.match(/^mierus?:\/\/([^:]+):([^@]+)@([^\/]+)$/);
 		if (!m) return null;
@@ -153,11 +156,25 @@ function parseMieruUrl(url) {
 	}
 }
 
-// Apply parsed config directly to LuCI Form input widgets on page
+// Apply parsed config directly to LuCI Form input widgets and UCI state
 function applyParsedConfigToForm(parsed) {
 	if (!parsed) return false;
 
+	// 1. Update LuCI's in-memory UCI state
+	uci.set('mieru', 'main', 'enabled', '1');
+	if (parsed.server) uci.set('mieru', 'main', 'server', parsed.server);
+	if (parsed.port) uci.set('mieru', 'main', 'port', '' + parsed.port);
+	if (parsed.username) uci.set('mieru', 'main', 'username', parsed.username);
+	if (parsed.password) uci.set('mieru', 'main', 'password', parsed.password);
+	if (parsed.protocol) uci.set('mieru', 'main', 'protocol', parsed.protocol);
+	if (parsed.socks5_port) uci.set('mieru', 'main', 'socks5_port', '' + parsed.socks5_port);
+	if (parsed.mtu) uci.set('mieru', 'main', 'mtu', '' + parsed.mtu);
+
+	uci.save();
+
+	// 2. Update DOM elements on screen
 	const map = {
+		enabled: '1',
 		server: parsed.server,
 		port: '' + parsed.port,
 		username: parsed.username,
@@ -176,7 +193,11 @@ function applyParsedConfigToForm(parsed) {
 				   document.getElementById(`cbid.mieru.main.${key}`);
 		
 		if (el) {
-			el.value = val;
+			if (el.type === 'checkbox') {
+				el.checked = (val === '1' || val === true);
+			} else {
+				el.value = val;
+			}
 			el.dispatchEvent(new Event('input', { bubbles: true }));
 			el.dispatchEvent(new Event('change', { bubbles: true }));
 			count++;
@@ -685,7 +706,8 @@ return view.extend({
 					if (parsed) {
 						applyParsedConfigToForm(parsed);
 						urlInput.value = '';
-						ui.addNotification(null, E('p', _('✓ Ссылка распарсена! Все поля формы автоматически заполнены. Нажмите "Сохранить и применить" внизу для сохранения.')), 'ok');
+						ui.addNotification(null, E('p', _('✓ Ссылка распарсена и применена! Перезапуск службы...')), 'ok');
+						ui.changes.apply();
 					} else {
 						ui.addNotification(null, E('p', _('Не удалось распознать формат ссылки Mieru.')), 'error');
 					}
@@ -1416,7 +1438,8 @@ return view.extend({
 												const parsed = parseMieruUrl(contents);
 												if (parsed) {
 													applyParsedConfigToForm(parsed);
-													ui.addNotification(null, E('p', _('✓ Ссылка распарсена! Все поля формы автоматически заполнены. Нажмите "Сохранить и применить" внизу для сохранения.')), 'ok');
+													ui.addNotification(null, E('p', _('✓ Ссылка распарсена и применена! Перезапуск службы...')), 'ok');
+													ui.changes.apply();
 													return;
 												}
 												callMieruImportJson(contents).then(res => {
