@@ -103,6 +103,101 @@ const callInitAction = rpc.declare({
 	params: [ 'name', 'action' ]
 });
 
+// Parse Mieru URL
+function parseMieruUrl(url) {
+	url = (url || '').trim();
+	if (!url.startsWith('mieru://') && !url.startsWith('mierus://')) return null;
+
+	try {
+		const parts = url.split('?');
+		const base = parts[0];
+		const query = parts[1] || '';
+
+		const m = base.match(/^mierus?:\/\/([^:]+):([^@]+)@([^\/]+)$/);
+		if (!m) return null;
+
+		let username = decodeURIComponent(m[1]);
+		let password = decodeURIComponent(m[2]);
+		let hostStr = m[3];
+		let server = hostStr;
+		let port = null;
+
+		if (hostStr.includes(':') && !hostStr.startsWith('[')) {
+			const hp = hostStr.split(':');
+			server = hp[0];
+			port = parseInt(hp[1], 10);
+		}
+
+		let protocol = 'TCP';
+		let socks5_port = 1080;
+		let mtu = 1400;
+
+		const pairs = query.split('&');
+		for (let i = 0; i < pairs.length; i++) {
+			const kv = pairs[i].split('=');
+			if (kv.length === 2) {
+				const k = kv[0].trim();
+				const v = decodeURIComponent(kv[1].trim());
+				if (k === 'port') port = parseInt(v, 10);
+				else if (k === 'protocol') protocol = v.toUpperCase();
+				else if (k === 'socks5_port') socks5_port = parseInt(v, 10);
+				else if (k === 'mtu') mtu = parseInt(v, 10);
+			}
+		}
+
+		if (!port || isNaN(port)) return null;
+
+		return { server, port, username, password, protocol, socks5_port, mtu };
+	} catch (e) {
+		return null;
+	}
+}
+
+// Apply parsed config directly to LuCI Form input widgets on page
+function applyParsedConfigToForm(parsed) {
+	if (!parsed) return false;
+
+	const map = {
+		server: parsed.server,
+		port: '' + parsed.port,
+		username: parsed.username,
+		password: parsed.password,
+		protocol: parsed.protocol,
+		socks5_port: parsed.socks5_port ? ('' + parsed.socks5_port) : null,
+		mtu: parsed.mtu ? ('' + parsed.mtu) : null
+	};
+
+	let count = 0;
+	for (let key in map) {
+		const val = map[key];
+		if (val === null || val === undefined) continue;
+
+		const el = document.querySelector(`[name="cbid.mieru.main.${key}"]`) || 
+				   document.getElementById(`cbid.mieru.main.${key}`);
+		
+		if (el) {
+			el.value = val;
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			el.dispatchEvent(new Event('change', { bubbles: true }));
+			count++;
+		}
+	}
+	return count > 0;
+}
+
+// Global paste handler to automatically capture Mieru URL anywhere on the page
+document.addEventListener('paste', function(ev) {
+	const pasted = (ev.clipboardData || window.clipboardData)?.getData('text');
+	if (pasted && (pasted.startsWith('mieru://') || pasted.startsWith('mierus://'))) {
+		const parsed = parseMieruUrl(pasted);
+		if (parsed) {
+			ev.preventDefault();
+			applyParsedConfigToForm(parsed);
+			ui.addNotification(null, E('p', _('✓ Ссылка распарсена! Все поля формы автоматически заполнены.')), 'ok');
+		}
+	}
+});
+
 function drawSparkline(canvas, history) {
 	if (!canvas) return;
 	const ctx = canvas.getContext('2d');
@@ -586,20 +681,14 @@ return view.extend({
 						ui.addNotification(null, E('p', _('Please enter a Mieru URL first!')));
 						return;
 					}
-					callMieruImportJson(urlVal).then(res => {
-						if (res.error) {
-							ui.addNotification(null, E('p', _('Import failed: ') + res.error));
-							return;
-						}
-						this.showImportPreview(res.preview, function(autoBk) {
-							callMieruConfirmImportJson(autoBk).then(confirmRes => {
-								if (confirmRes.success) {
-									ui.addNotification(null, E('p', _('Configuration imported successfully.')), 'ok');
-									setTimeout(() => location.reload(), 1500);
-								}
-							});
-						});
-					});
+					const parsed = parseMieruUrl(urlVal);
+					if (parsed) {
+						applyParsedConfigToForm(parsed);
+						urlInput.value = '';
+						ui.addNotification(null, E('p', _('✓ Ссылка распарсена! Все поля формы автоматически заполнены. Нажмите "Сохранить и применить" внизу для сохранения.')), 'ok');
+					} else {
+						ui.addNotification(null, E('p', _('Не удалось распознать формат ссылки Mieru.')), 'error');
+					}
 				})
 			}, _('Import URL'));
 
@@ -1324,6 +1413,12 @@ return view.extend({
 													return;
 												}
 												ui.hideModal();
+												const parsed = parseMieruUrl(contents);
+												if (parsed) {
+													applyParsedConfigToForm(parsed);
+													ui.addNotification(null, E('p', _('✓ Ссылка распарсена! Все поля формы автоматически заполнены. Нажмите "Сохранить и применить" внизу для сохранения.')), 'ok');
+													return;
+												}
 												callMieruImportJson(contents).then(res => {
 													if (res.error) {
 														ui.addNotification(null, E('p', _('Import failed: ') + res.error));
