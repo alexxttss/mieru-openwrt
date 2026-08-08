@@ -22,12 +22,22 @@ wget -qO- https://raw.githubusercontent.com/alexxttss/mieru-openwrt/main/install
 
 ---
 
+## 1.1. Полное удаление с роутера (одной командой)
+
+Если вам потребуется полностью удалить Mieru Client, веб-интерфейс LuCI и все конфигурационные файлы с роутера, выполните команду:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/alexxttss/mieru-openwrt/main/uninstall.sh | sh
+```
+
+---
+
 ## 2. Структура репозитория
 
 - `packages/` — директория с готовыми скомпилированными APK-пакетами:
   - `mieru-3.34.1-r1.apk` — основной бинарный файл клиента Mieru и служба procd.
-  - `luci-app-mieru-0.260808.28259.apk` — плагин веб-интерфейса LuCI (написан на JS/ucode, с поддержкой импорта ссылок `mierus://`).
-  - `luci-i18n-mieru-ru-0.260808.28259.apk` — русская локализация для веб-интерфейса.
+  - `luci-app-mieru-0.260808.30282.apk` — плагин веб-интерфейса LuCI (написан на JS/ucode, с поддержкой импорта ссылок `mierus://`).
+  - `luci-i18n-mieru-ru-0.260808.30282.apk` — русская локализация для веб-интерфейса.
 - `package/` — исходный код структуры пакетов OpenWrt (для сборки в SDK):
   - `package/network/services/mieru/` — Makefile сборки клиента, UCI-конфиг, procd init-скрипт и ucode-монитор трафика/пинга.
   - `package/network/services/luci-app-mieru/` — исходные коды LuCI-интерфейса и ubus-контроллера.
