@@ -219,6 +219,26 @@ document.addEventListener('paste', function(ev) {
 	}
 });
 
+// Auto-check "Enable" whenever user manually types into Server, Port, Username, or Password
+document.addEventListener('input', function(ev) {
+	const name = ev.target ? ev.target.name : null;
+	if (name && (name === 'cbid.mieru.main.server' || name === 'cbid.mieru.main.port' || name === 'cbid.mieru.main.username' || name === 'cbid.mieru.main.password')) {
+		const val = (ev.target.value || '').trim();
+		if (val.length > 0) {
+			const cb = document.querySelector('[name="cbid.mieru.main.enabled"]') || 
+					   document.getElementById('cbid.mieru.main.enabled');
+			if (cb && !cb.checked) {
+				cb.checked = true;
+				cb.dispatchEvent(new Event('change', { bubbles: true }));
+				try {
+					uci.set('mieru', 'main', 'enabled', '1');
+					uci.save();
+				} catch (e) {}
+			}
+		}
+	}
+});
+
 function drawSparkline(canvas, history) {
 	if (!canvas) return;
 	const ctx = canvas.getContext('2d');
@@ -368,7 +388,7 @@ function copyTextToClipboard(text) {
 }
 
 return view.extend({
-	pollInterval: 5,
+	pollInterval: 2,
 
 	load: function() {
 		return Promise.all([

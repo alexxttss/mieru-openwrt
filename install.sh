@@ -41,8 +41,8 @@ fi
 RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/packages"
 
 APK_MIERU="mieru-3.34.1-r1.apk"
-APK_LUCI="luci-app-mieru-0.260808.32174.apk"
-APK_LANG="luci-i18n-mieru-ru-0.260808.32174.apk"
+APK_LUCI="luci-app-mieru-0.260808.33283.apk"
+APK_LANG="luci-i18n-mieru-ru-0.260808.33283.apk"
 
 TMP_DIR="/tmp/mieru_install"
 mkdir -p "$TMP_DIR"
