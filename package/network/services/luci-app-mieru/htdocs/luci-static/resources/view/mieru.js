@@ -283,8 +283,7 @@ return view.extend({
 		const valLatMax = document.getElementById('mieru_val_lat_max');
 		const valLatAvg = document.getElementById('mieru_val_lat_avg');
 		const valActConns = document.getElementById('mieru_val_act_conns');
-		const valTrafficRx = document.getElementById('mieru_val_traffic_rx');
-		const valTrafficTx = document.getElementById('mieru_val_traffic_tx');
+		const valTrafficTotal = document.getElementById('mieru_val_traffic_total');
 		const valSpeedRx = document.getElementById('mieru_val_speed_rx');
 		const valSpeedTx = document.getElementById('mieru_val_speed_tx');
 		const valSpeedAvgRx = document.getElementById('mieru_val_speed_avg_rx');
@@ -328,8 +327,7 @@ return view.extend({
 			if (valLatMax) valLatMax.innerText = '-';
 			if (valLatAvg) valLatAvg.innerText = '-';
 			if (valActConns) valActConns.innerText = '-';
-			if (valTrafficRx) valTrafficRx.innerText = '-';
-			if (valTrafficTx) valTrafficTx.innerText = '-';
+			if (valTrafficTotal) valTrafficTotal.innerText = '-';
 			if (valSpeedRx) valSpeedRx.innerText = '-';
 			if (valSpeedTx) valSpeedTx.innerText = '-';
 			if (valSpeedAvgRx) valSpeedAvgRx.innerText = '-';
@@ -406,8 +404,12 @@ return view.extend({
 		if (valLatMax) valLatMax.innerText = stat.latency_max ? stat.latency_max + ' ' + _('ms') : '-';
 		if (valLatAvg) valLatAvg.innerText = stat.latency_avg ? stat.latency_avg + ' ' + _('ms') : '-';
 		if (valActConns) valActConns.innerText = stat.active_connections ?? '0';
-		if (valTrafficRx) valTrafficRx.innerText = formatSize(stat.rx_bytes);
-		if (valTrafficTx) valTrafficTx.innerText = formatSize(stat.tx_bytes);
+		if (valTrafficTotal) {
+			const rx = stat.rx_bytes || 0;
+			const tx = stat.tx_bytes || 0;
+			const total = rx + tx;
+			valTrafficTotal.innerText = formatSize(total) + ' (' + formatSize(rx) + ' ↓ / ' + formatSize(tx) + ' ↑)';
+		}
 		if (valSpeedRx) valSpeedRx.innerText = formatSpeed(stat.rx_speed);
 		if (valSpeedTx) valSpeedTx.innerText = formatSpeed(stat.tx_speed);
 		if (valSpeedAvgRx) valSpeedAvgRx.innerText = formatSpeed(stat.rx_speed_avg);
@@ -561,6 +563,55 @@ return view.extend({
 
 		// ------------------ General settings ------------------
 		let o;
+
+		// Quick URL Import Box at top of General Settings
+		o = s.taboption('general', form.DummyValue, '_quick_url');
+		o.rawhtml = true;
+		o.render = L.bind(function() {
+			const urlInput = E('input', {
+				'type': 'text',
+				'id': 'mieru_quick_url_input',
+				'class': 'cbi-input-text',
+				'style': 'width: calc(100% - 170px); margin-right: 8px; font-family: monospace;',
+				'placeholder': _('Paste Mieru URL (mierus://...) here...')
+			});
+
+			const applyBtn = E('button', {
+				'class': 'btn cbi-button-action',
+				'style': 'white-space: nowrap;',
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					const urlVal = urlInput.value.trim();
+					if (!urlVal) {
+						ui.addNotification(null, E('p', _('Please enter a Mieru URL first!')));
+						return;
+					}
+					callMieruImportJson(urlVal).then(res => {
+						if (res.error) {
+							ui.addNotification(null, E('p', _('Import failed: ') + res.error));
+							return;
+						}
+						this.showImportPreview(res.preview, function(autoBk) {
+							callMieruConfirmImportJson(autoBk).then(confirmRes => {
+								if (confirmRes.success) {
+									ui.addNotification(null, E('p', _('Configuration imported successfully.')), 'ok');
+									setTimeout(() => location.reload(), 1500);
+								}
+							});
+						});
+					});
+				})
+			}, _('Import URL'));
+
+			return E('div', { 'class': 'cbi-value', 'style': 'background: rgba(0, 128, 255, 0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(0, 128, 255, 0.2); margin-bottom: 15px;' }, [
+				E('label', { 'class': 'cbi-value-title', 'style': 'font-weight: bold; color: #0072c6;' }, _('Import from Link:')),
+				E('div', { 'class': 'cbi-value-field', 'style': 'display: flex; align-items: center;' }, [
+					urlInput,
+					applyBtn
+				])
+			]);
+		}, this);
+
 		o = s.taboption('general', form.Flag, 'enabled', _('Enable'), _('Enable Mieru client service'));
 		o.rmempty = false;
 
@@ -1158,10 +1209,9 @@ return view.extend({
 							E('div', { 'class': 'td', 'id': 'mieru_val_act_conns', 'style': 'width:25%; padding:8px; border-bottom:1px solid rgba(128,128,128,0.1);' }, '-')
 						]),
 						E('div', { 'class': 'tr' }, [
-							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; font-weight:bold; border-bottom:1px solid rgba(128,128,128,0.1);' }, _('Traffic (RX/TX):')),
+							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; font-weight:bold; border-bottom:1px solid rgba(128,128,128,0.1);' }, _('Total Traffic:')),
 							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; border-bottom:1px solid rgba(128,128,128,0.1);' }, [
-								E('span', { 'id': 'mieru_val_traffic_rx' }, '-'), ' / ',
-								E('span', { 'id': 'mieru_val_traffic_tx' }, '-')
+								E('span', { 'id': 'mieru_val_traffic_total' }, '-')
 							]),
 							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; font-weight:bold; border-bottom:1px solid rgba(128,128,128,0.1);' }, _('Current Speed (RX/TX):')),
 							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; border-bottom:1px solid rgba(128,128,128,0.1);' }, [
@@ -1248,7 +1298,52 @@ return view.extend({
 									() => ui.addNotification(null, E('p', _('Ошибка копирования SOCKS5h URL')), 'error')
 								);
 							}
-						}, _('Copy SOCKS5h URL'))
+						}, _('Copy SOCKS5h URL')),
+						E('button', {
+							'class': 'btn cbi-button-action',
+							'style': 'margin-left: 10px;',
+							'click': ui.createHandlerFn(this, function() {
+								const ta = E('textarea', { 'style': 'width:100%; height:150px; font-family:monospace;', 'placeholder': _('Paste Mieru URL (mierus://...) or JSON configuration here...') });
+								const checkAutoBk = E('input', { 'type': 'checkbox', 'id': 'quick_modal_import_auto_bk', 'checked': true });
+								
+								ui.showModal(_('Import Configuration via Link / JSON'), [
+									ta,
+									E('div', { 'style': 'margin-top:10px;' }, [
+										E('label', {}, [
+											checkAutoBk, ' ', _('Create backup of current settings before importing')
+										])
+									]),
+									E('div', { 'class': 'right', 'style': 'margin-top:10px;' }, [
+										E('button', { 'class': 'btn cbi-button-reset', 'click': ui.hideModal, 'style': 'margin-right:5px;' }, _('Cancel')),
+										E('button', {
+											'class': 'btn cbi-button-action',
+											'click': ui.createHandlerFn(this, function() {
+												const contents = ta.value.trim();
+												if (!contents) {
+													ui.addNotification(null, E('p', _('Please enter a Mieru URL or JSON first!')));
+													return;
+												}
+												ui.hideModal();
+												callMieruImportJson(contents).then(res => {
+													if (res.error) {
+														ui.addNotification(null, E('p', _('Import failed: ') + res.error));
+														return;
+													}
+													this.showImportPreview(res.preview, function(autoBk) {
+														callMieruConfirmImportJson(autoBk).then(confirmRes => {
+															if (confirmRes.success) {
+																ui.addNotification(null, E('p', _('Configuration imported successfully.')), 'ok');
+																setTimeout(() => location.reload(), 1500);
+															}
+														});
+													});
+												});
+											})
+										}, _('Import & Apply'))
+									])
+								]);
+							})
+						}, _('Import Link / JSON'))
 					]),
 					E('div', { 'style': 'font-size:12px; opacity:0.5;' }, [
 						_('Last Update:'), ' ', E('span', { 'id': 'mieru_val_last_update' }, _('Never'))

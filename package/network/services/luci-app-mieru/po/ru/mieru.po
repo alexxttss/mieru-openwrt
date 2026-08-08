@@ -532,8 +532,26 @@ msgstr "ICMP Ping также работает"
 msgid "Import JSON or URL Configuration"
 msgstr "Импорт конфигурации JSON или URL"
 
-msgid "Paste Mieru SOCKS5, Sing-Box JSON, or Mieru URL (mierus://...) configuration here..."
-msgstr "Вставьте конфигурацию Mieru SOCKS5, Sing-Box JSON или Mieru URL (mierus://...) сюда..."
+msgid "Total Traffic:"
+msgstr "Общий трафик:"
+
+msgid "Import from Link:"
+msgstr "Импорт по ссылке:"
+
+msgid "Import URL"
+msgstr "Импортировать ссылку"
+
+msgid "Import Link / JSON"
+msgstr "Импорт ссылки / JSON"
+
+msgid "Paste Mieru URL (mierus://...) here..."
+msgstr "Вставьте ссылку Mieru (mierus://...) сюда..."
+
+msgid "Paste Mieru URL (mierus://...) or JSON configuration here..."
+msgstr "Вставьте ссылку Mieru (mierus://...) или конфигурацию JSON сюда..."
+
+msgid "Import Configuration via Link / JSON"
+msgstr "Импорт конфигурации по ссылке / JSON"
 
 
 
