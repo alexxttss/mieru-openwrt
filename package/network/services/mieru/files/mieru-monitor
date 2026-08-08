@@ -139,7 +139,7 @@ while (true) {
 	const cfg = get_config();
 	
 	// If disabled or interval is 0, sleep and do nothing
-	if (cfg.monitor_interval == 0 || !cfg.enabled || !cfg.server) {
+	if (cfg.monitor_interval == 0 || !cfg.enabled || !cfg.server || !cfg.port) {
 		state.status = 'Offline';
 		state.latency = null;
 		state.disconnect_reason = 'Disabled';

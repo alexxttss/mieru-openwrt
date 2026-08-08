@@ -276,7 +276,8 @@ const methods = {
 			const p = req.args?.port;
 			if (!s || !p) return { error: 'Server or Port missing' };
 			
-			const cmd = `curl -s -o /dev/null -w "%{time_connect}" --connect-timeout 2 -m 3 http://${shellquote(s)}:${+p} 2>&1; echo "EXIT_CODE:$?"`;
+			const url = `http://${s}:${+p}`;
+			const cmd = `curl -s -o /dev/null -w "%{time_connect}" --connect-timeout 2 -m 3 ${shellquote(url)} 2>&1; echo "EXIT_CODE:$?"`;
 			const proc = popen(cmd);
 			let out = '';
 			if (proc) {
@@ -327,7 +328,7 @@ const methods = {
 		args: { port: 'string' },
 		call: function(req) {
 			const p = req.args?.port ?? '1080';
-			const cmd = `curl -v --socks5-hostname 127.0.0.1:${p} -m 5 https://google.com/generate_204 2>&1`;
+			const cmd = `curl -v -k --socks5-hostname 127.0.0.1:${+p} -m 5 http://connectivitycheck.gstatic.com/generate_204 2>&1`;
 			const proc = popen(cmd);
 			const out = proc ? proc.read('all') : 'Failed to run curl';
 			const code = proc ? proc.close() : -1;
