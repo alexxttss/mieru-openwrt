@@ -217,6 +217,20 @@ function applyParsedConfigToForm(parsed) {
 	return count > 0;
 }
 
+// Display inline notification badge right next to the Import button
+function showInlineImportStatus(msg, isSuccess = true) {
+	const badge = document.getElementById('mieru_url_import_msg');
+	if (badge) {
+		badge.innerHTML = isSuccess 
+			? `<span style="color: #2eb85c; background: rgba(46, 184, 92, 0.15); padding: 5px 12px; border-radius: 4px; border: 1px solid rgba(46, 184, 92, 0.3); display: inline-flex; align-items: center; gap: 4px;">✓ ${msg}</span>`
+			: `<span style="color: #e55353; background: rgba(229, 83, 83, 0.15); padding: 5px 12px; border-radius: 4px; border: 1px solid rgba(229, 83, 83, 0.3); display: inline-flex; align-items: center; gap: 4px;">✗ ${msg}</span>`;
+		
+		setTimeout(() => {
+			if (badge) badge.innerHTML = '';
+		}, 6000);
+	}
+}
+
 // Global paste handler to automatically capture Mieru URL anywhere on the page
 document.addEventListener('paste', function(ev) {
 	const pasted = (ev.clipboardData || window.clipboardData)?.getData('text');
@@ -225,7 +239,7 @@ document.addEventListener('paste', function(ev) {
 		if (parsed) {
 			ev.preventDefault();
 			applyParsedConfigToForm(parsed);
-			ui.addNotification(null, E('p', _('✓ Ссылка распарсена! Все поля формы автоматически заполнены.')), 'ok');
+			showInlineImportStatus(_('Ссылка автоматически вставлена и применена!'), true);
 		}
 	}
 });
@@ -721,8 +735,13 @@ return view.extend({
 				'type': 'text',
 				'id': 'mieru_quick_url_input',
 				'class': 'cbi-input-text',
-				'style': 'width: calc(100% - 170px); margin-right: 8px; font-family: monospace;',
+				'style': 'width: calc(100% - 320px); min-width: 240px; margin-right: 8px; font-family: monospace;',
 				'placeholder': _('Paste Mieru URL (mierus://...) here...')
+			});
+
+			const msgBadge = E('span', {
+				'id': 'mieru_url_import_msg',
+				'style': 'margin-left: 10px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; white-space: nowrap;'
 			});
 
 			const applyBtn = E('button', {
@@ -732,26 +751,27 @@ return view.extend({
 					ev.preventDefault();
 					const urlVal = urlInput.value.trim();
 					if (!urlVal) {
-						ui.addNotification(null, E('p', _('Please enter a Mieru URL first!')));
+						showInlineImportStatus(_('Вставьте ссылку Mieru!'), false);
 						return;
 					}
 					const parsed = parseMieruUrl(urlVal);
 					if (parsed) {
 						applyParsedConfigToForm(parsed);
 						urlInput.value = '';
-						ui.addNotification(null, E('p', _('✓ Ссылка распарсена и применена! Перезапуск службы...')), 'ok');
+						showInlineImportStatus(_('Ссылка применена! Перезапуск службы...'), true);
 						ui.changes.apply();
 					} else {
-						ui.addNotification(null, E('p', _('Не удалось распознать формат ссылки Mieru.')), 'error');
+						showInlineImportStatus(_('Неверный формат ссылки Mieru'), false);
 					}
 				})
 			}, _('Import URL'));
 
 			return E('div', { 'class': 'cbi-value', 'style': 'background: rgba(0, 128, 255, 0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(0, 128, 255, 0.2); margin-bottom: 15px;' }, [
 				E('label', { 'class': 'cbi-value-title', 'style': 'font-weight: bold; color: #0072c6;' }, _('Import from Link:')),
-				E('div', { 'class': 'cbi-value-field', 'style': 'display: flex; align-items: center;' }, [
+				E('div', { 'class': 'cbi-value-field', 'style': 'display: flex; align-items: center; flex-wrap: wrap; gap: 6px;' }, [
 					urlInput,
-					applyBtn
+					applyBtn,
+					msgBadge
 				])
 			]);
 		}, this);
