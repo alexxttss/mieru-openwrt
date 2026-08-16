@@ -49,6 +49,18 @@ msgstr "Последняя ошибка клиента"
 msgid "Start Mieru"
 msgstr "Запустить Mieru"
 
+msgid "Add to Autostart"
+msgstr "Добавить в автозагрузку"
+
+msgid "Remove from Autostart"
+msgstr "Убрать из автозагрузки"
+
+msgid "Mieru Client added to autostart."
+msgstr "Служба Mieru добавлена в автозагрузку."
+
+msgid "Mieru Client removed from autostart."
+msgstr "Служба Mieru удалена из автозагрузки."
+
 msgid "Stop Mieru"
 msgstr "Остановить Mieru"
 

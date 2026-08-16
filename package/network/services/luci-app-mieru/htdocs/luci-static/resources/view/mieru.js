@@ -96,6 +96,17 @@ const callMieruCreateManualBackup = rpc.declare({
 	method: 'createManualBackup'
 });
 
+const callMieruGetAutostartStatus = rpc.declare({
+	object: 'luci.mieru',
+	method: 'getAutostartStatus'
+});
+
+const callMieruSetAutostart = rpc.declare({
+	object: 'luci.mieru',
+	method: 'setAutostart',
+	params: ['enable']
+});
+
 // Standard rc service calls
 const callInitAction = rpc.declare({
 	object: 'rc',
@@ -393,7 +404,8 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('mieru'),
-			callMieruGetBackups()
+			callMieruGetBackups(),
+			callMieruGetAutostartStatus()
 		]);
 	},
 
@@ -684,6 +696,7 @@ return view.extend({
 	render: function(loadedData) {
 		const uciData = loadedData[0];
 		const backupsData = loadedData[1]?.backups || [];
+		const autostartData = loadedData[2] || { enabled: false };
 
 		const m = new form.Map('mieru', '', '');
 
@@ -1396,13 +1409,35 @@ return view.extend({
 						E('button', {
 							'id': 'mieru_btn_restart',
 							'class': 'btn cbi-button-save',
-							'style': 'margin-right: 15px;',
+							'style': 'margin-right: 5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callInitAction({ name: 'mieru', action: 'restart' }).then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client restarted.')));
 								});
 							})
 						}, _('Restart Mieru')),
+						E('button', {
+							'id': 'mieru_btn_autostart',
+							'class': autostartData.enabled ? 'btn cbi-button-reset' : 'btn cbi-button-action',
+							'style': 'margin-right: 15px;',
+							'click': ui.createHandlerFn(this, function() {
+								const btn = document.getElementById('mieru_btn_autostart');
+								const isEnabled = btn.getAttribute('data-enabled') === 'true';
+								const nextState = !isEnabled;
+								return callMieruSetAutostart(nextState).then(res => {
+									btn.setAttribute('data-enabled', res.enabled ? 'true' : 'false');
+									if (res.enabled) {
+										btn.className = 'btn cbi-button-reset';
+										btn.innerText = _('Remove from Autostart');
+										ui.addNotification(null, E('p', _('Mieru Client added to autostart.')), 'ok');
+									} else {
+										btn.className = 'btn cbi-button-action';
+										btn.innerText = _('Add to Autostart');
+										ui.addNotification(null, E('p', _('Mieru Client removed from autostart.')), 'ok');
+									}
+								});
+							})
+						}, autostartData.enabled ? _('Remove from Autostart') : _('Add to Autostart')),
 
 						// Copy SOCKS5 URL Buttons
 						E('button', {

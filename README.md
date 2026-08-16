@@ -32,6 +32,16 @@ wget -qO- https://raw.githubusercontent.com/alexxttss/mieru-openwrt/main/uninsta
 
 ---
 
+## 1.2. Быстрое обновление пакета (одной командой)
+
+Для обновления клиента Mieru и интерфейса LuCI до свежей версии с сохранением всех настроек выполните:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/alexxttss/mieru-openwrt/main/update.sh | sh
+```
+
+---
+
 ## 2. Структура репозитория
 
 - `packages/` — директория с готовыми скомпилированными APK-пакетами:

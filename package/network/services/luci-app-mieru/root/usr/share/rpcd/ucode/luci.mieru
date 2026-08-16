@@ -279,13 +279,11 @@ const methods = {
 				proc?.close();
 				
 				const m_time = match(tcp_out, /^([0-9.]+)/);
-				const m_exit = match(tcp_out, /EXIT_CODE:([0-9]+)/);
-				const exitCode = m_exit ? +m_exit[1] : 999;
 				
 				let tcpResult = "";
-				if (m_time && (exitCode === 0 || exitCode === 52 || exitCode === 56 || exitCode === 7)) {
+				if (m_time && +m_time[1] > 0) {
 					const rtt_ms = sprintf("%.1f", (+m_time[1]) * 1000);
-					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping заблокирован или запрещён в фаерволе сервера.\n[✓] Автоматический TCP-пинг порта ${port}: УСПЕШНО!\n[✓] Задержка TCP-подключения: ${rtt_ms} мс.\nСервер ${s}:${port} доступен и работает по протоколу Mieru.`;
+					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping заблокирован или запрещён на сервере.\n[✓] Автоматический TCP-пинг порта ${port}: УСПЕШНО!\n[✓] Задержка TCP-подключения: ${rtt_ms} мс.\nСервер ${s}:${port} полностью доступен!`;
 				} else {
 					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping и TCP-порт ${port} недоступны. Проверьте фаервол на вашем VPS.`;
 				}
@@ -314,12 +312,6 @@ const methods = {
 			}
 			
 			const m_time = match(out, /^([0-9.]+)/);
-			const m_exit = match(out, /EXIT_CODE:([0-9]+)/);
-			
-			const time_connect = m_time ? +m_time[1] : 0;
-			const exit_code = m_exit ? +m_exit[1] : 28;
-			const rtt_ms = int(time_connect * 1000 + 0.5);
-			
 			let err = '';
 			let success = false;
 			if (time_connect > 0) {
@@ -593,6 +585,29 @@ const methods = {
 		call: function(req) {
 			create_backup(req.args?.comment);
 			return { success: true };
+		}
+	},
+
+	getAutostartStatus: {
+		call: function() {
+			const p = popen("/etc/init.d/mieru enabled 2>/dev/null; echo \"EXIT_CODE:$?\"");
+			let out = p ? p.read('all') : '';
+			p?.close();
+			const enabled = match(out, /EXIT_CODE:0/) != null;
+			return { enabled: enabled };
+		}
+	},
+
+	setAutostart: {
+		args: { enable: 'boolean' },
+		call: function(req) {
+			const action = req.args?.enable ? 'enable' : 'disable';
+			system(`/etc/init.d/mieru ${action}`);
+			const p = popen("/etc/init.d/mieru enabled 2>/dev/null; echo \"EXIT_CODE:$?\"");
+			let out = p ? p.read('all') : '';
+			p?.close();
+			const enabled = match(out, /EXIT_CODE:0/) != null;
+			return { success: true, enabled: enabled };
 		}
 	}
 };
