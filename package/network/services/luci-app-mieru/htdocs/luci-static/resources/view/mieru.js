@@ -1373,7 +1373,7 @@ return view.extend({
 
 						// Self-monitoring stats
 						E('div', { 'class': 'tr' }, [
-							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; font-weight:bold; opacity:0.7;' }, _('Monitor CPU / RAM:')),
+					E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; font-weight:bold; opacity:0.7;' }, _('Monitor CPU / RAM:')),
 							E('div', { 'class': 'td', 'style': 'width:25%; padding:8px; opacity:0.7;' }, [
 								E('span', { 'id': 'mieru_val_cpu_m' }, '-'), ' / ',
 								E('span', { 'id': 'mieru_val_mem_m' }, '-')
@@ -1384,12 +1384,11 @@ return view.extend({
 					])
 				]),
 				
-				E('div', { 'class': 'cbi-value', 'style': 'border:none; padding-left:0; margin-top:10px; display:flex; align-items:center; justify-content:space-between;' }, [
-					E('div', {}, [
+				E('div', { 'class': 'cbi-value', 'style': 'border:none; padding:12px 0 5px 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;' }, [
+					E('div', { 'style': 'display:flex; flex-wrap:wrap; align-items:center; gap:6px;' }, [
 						E('button', {
 							'id': 'mieru_btn_start',
 							'class': 'btn cbi-button-action',
-							'style': 'margin-right: 5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callInitAction({ name: 'mieru', action: 'start' }).then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client started.')));
@@ -1399,7 +1398,6 @@ return view.extend({
 						E('button', {
 							'id': 'mieru_btn_stop',
 							'class': 'btn cbi-button-reset',
-							'style': 'margin-right: 5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callInitAction({ name: 'mieru', action: 'stop' }).then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client stopped.')));
@@ -1409,7 +1407,6 @@ return view.extend({
 						E('button', {
 							'id': 'mieru_btn_restart',
 							'class': 'btn cbi-button-save',
-							'style': 'margin-right: 5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callInitAction({ name: 'mieru', action: 'restart' }).then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client restarted.')));
@@ -1419,7 +1416,6 @@ return view.extend({
 						E('button', {
 							'id': 'mieru_btn_autostart',
 							'class': autostartData.enabled ? 'btn cbi-button-reset' : 'btn cbi-button-action',
-							'style': 'margin-right: 15px;',
 							'click': ui.createHandlerFn(this, function() {
 								const btn = document.getElementById('mieru_btn_autostart');
 								const isEnabled = btn.getAttribute('data-enabled') === 'true';
@@ -1439,10 +1435,11 @@ return view.extend({
 							})
 						}, autostartData.enabled ? _('Remove from Autostart') : _('Add to Autostart')),
 
+						E('span', { 'style': 'display:inline-block; width:1px; height:20px; background:rgba(128,128,128,0.3); margin:0 4px;' }),
+
 						// Copy SOCKS5 URL Buttons
 						E('button', {
 							'class': 'btn cbi-button-neutral',
-							'style': 'margin-right: 5px;',
 							'click': function() {
 								const port = uci.get('mieru', 'main', 'socks5_port') || '1080';
 								const ip = window.location.hostname || '192.168.1.1';
@@ -1467,7 +1464,6 @@ return view.extend({
 						}, _('Copy SOCKS5h URL')),
 						E('button', {
 							'class': 'btn cbi-button-action',
-							'style': 'margin-left: 10px;',
 							'click': ui.createHandlerFn(this, function() {
 								const ta = E('textarea', { 'style': 'width:100%; height:150px; font-family:monospace;', 'placeholder': _('Paste Mieru URL (mierus://...) or JSON configuration here...') });
 								const checkAutoBk = E('input', { 'type': 'checkbox', 'id': 'quick_modal_import_auto_bk', 'checked': true });
