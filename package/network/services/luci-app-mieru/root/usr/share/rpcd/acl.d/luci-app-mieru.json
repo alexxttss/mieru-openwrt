@@ -4,7 +4,7 @@
 		"read": {
 			"ubus": {
 				"uci": [ "get" ],
-				"luci.mieru": [ "getStatus", "pingServer", "tcpConnect", "validateConfig", "testSocks5", "readLog", "getBackups", "exportBackup" ],
+				"luci.mieru": [ "getStatus", "pingServer", "tcpConnect", "validateConfig", "testSocks5", "readLog", "getBackups", "exportBackup", "getAutostartStatus" ],
 				"service": [ "list" ],
 				"rc": [ "list" ],
 				"luci": [ "getProcessList" ]
@@ -14,7 +14,7 @@
 		"write": {
 			"ubus": {
 				"uci": [ "set", "commit" ],
-				"luci.mieru": [ "clearLog", "importBackup", "confirmRestore", "deleteBackup", "restoreBackup", "resetConfig", "importJson", "confirmImportJson", "createManualBackup" ],
+				"luci.mieru": [ "clearLog", "importBackup", "confirmRestore", "deleteBackup", "restoreBackup", "resetConfig", "importJson", "confirmImportJson", "createManualBackup", "setAutostart" ],
 				"rc": [ "init" ]
 			},
 			"uci": [ "mieru" ]
