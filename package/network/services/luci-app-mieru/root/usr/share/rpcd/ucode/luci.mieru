@@ -287,27 +287,27 @@ const methods = {
 			
 			const uci = cursor();
 			uci.load("mieru");
-			const port = uci.get("mieru", "main", "port") || "2012";
+			let port = uci.get("mieru", "main", "port") || "2012";
+			let clean_port = match(port, /^([0-9]+)/)?.[1] || "2012";
 
 			const p = popen(`ping -c 3 -W 2 ${shellquote(s)} 2>&1`);
 			let out = p ? p.read('all') : '';
 			p?.close();
 			
-			if (!out || match(out, /100% packet loss|100\.0% packet loss|100% loss|bad address|100% packet/)) {
-				const url = `http://${s}:${+port}`;
+			if (!out || match(out, /100% packet loss|100\.0% packet loss|100% loss|bad address|100% packet|0 packets received/)) {
+				const url = `http://${s}:${clean_port}`;
 				const cmd = `curl -s -o /dev/null -w "%{time_connect}" --connect-timeout 2 -m 3 ${shellquote(url)} 2>&1; echo "EXIT_CODE:$?"`;
 				const proc = popen(cmd);
 				let tcp_out = proc ? proc.read('all') : '';
 				proc?.close();
 				
 				const m_time = match(tcp_out, /^([0-9.]+)/);
-				
 				let tcpResult = "";
-				if (m_time && +m_time[1] > 0) {
+				if (m_time && length(m_time) > 1 && +m_time[1] > 0) {
 					const rtt_ms = sprintf("%.1f", (+m_time[1]) * 1000);
-					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping заблокирован или запрещён на сервере.\n[✓] Автоматический TCP-пинг порта ${port}: УСПЕШНО!\n[✓] Задержка TCP-подключения: ${rtt_ms} мс.\nСервер ${s}:${port} полностью доступен!`;
+					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping заблокирован или запрещён на сервере.\n[✓] Автоматический TCP-пинг порта ${clean_port}: УСПЕШНО!\n[✓] Задержка TCP-подключения: ${rtt_ms} мс.\nСервер ${s}:${clean_port} полностью доступен!`;
 				} else {
-					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping и TCP-порт ${port} недоступны. Проверьте фаервол на вашем VPS.`;
+					tcpResult = `\n--------------------------------------------------\n[!] ICMP Ping и TCP-порт ${clean_port} недоступны. Проверьте фаервол на вашем VPS.`;
 				}
 				
 				return { output: (out ? out : "PING " + s + "...\nICMP Ping не удался.") + tcpResult };
@@ -321,23 +321,27 @@ const methods = {
 		args: { server: 'string', port: 'string' },
 		call: function(req) {
 			const s = req.args?.server;
-			const p = req.args?.port;
+			let p = req.args?.port;
 			if (!s || !p) return { error: 'Server or Port missing' };
 			
-			const url = `http://${s}:${+p}`;
+			let clean_port = match(p, /^([0-9]+)/)?.[1] || "2012";
+			const url = `http://${s}:${clean_port}`;
 			const cmd = `curl -s -o /dev/null -w "%{time_connect}" --connect-timeout 2 -m 3 ${shellquote(url)} 2>&1; echo "EXIT_CODE:$?"`;
 			const proc = popen(cmd);
-			let out = '';
-			if (proc) {
-				out = proc.read('all');
-				proc.close();
-			}
+			let out = proc ? proc.read('all') : '';
+			proc?.close();
 			
 			const m_time = match(out, /^([0-9.]+)/);
+			const m_exit = match(out, /EXIT_CODE:([0-9]+)/);
+			const time_connect = (m_time && length(m_time) > 1) ? +m_time[1] : 0;
+			const exit_code = (m_exit && length(m_exit) > 1) ? +m_exit[1] : -1;
+			
 			let err = '';
 			let success = false;
+			let rtt = 0;
 			if (time_connect > 0) {
 				success = true;
+				rtt = sprintf("%.1f", time_connect * 1000);
 			} else {
 				if (exit_code == 6) {
 					err = 'DNS error';
@@ -350,7 +354,7 @@ const methods = {
 			
 			return {
 				success: success,
-				rtt: rtt_ms,
+				rtt: rtt,
 				error: err
 			};
 		}

@@ -17,12 +17,14 @@ const callMieruStatus = rpc.declare({
 
 const callMieruPing = rpc.declare({
 	object: 'luci.mieru',
-	method: 'pingServer'
+	method: 'pingServer',
+	params: ['server']
 });
 
 const callMieruTcpConnect = rpc.declare({
 	object: 'luci.mieru',
-	method: 'tcpConnect'
+	method: 'tcpConnect',
+	params: ['server', 'port']
 });
 
 const callMieruValidate = rpc.declare({
@@ -879,7 +881,7 @@ return view.extend({
 						'class': 'btn cbi-button-action',
 						'style': 'margin-right: 5px;',
 						'click': ui.createHandlerFn(this, function() {
-							const srv = uci.get('mieru', 'main', 'server');
+							const srv = (uci.get('mieru', 'main', 'server') || '').trim();
 							if (!srv) {
 								ui.addNotification(null, E('p', _('Please configure server IP first!')));
 								return;
@@ -894,6 +896,8 @@ return view.extend({
 								} else {
 									logMsg(_('ICMP Ping successful'));
 								}
+							}).catch(err => {
+								logMsg(_('Ping error: ') + (err.message || err));
 							});
 						})
 					}, _('Ping Server')),
@@ -902,14 +906,14 @@ return view.extend({
 						'class': 'btn cbi-button-action',
 						'style': 'margin-right: 5px;',
 						'click': ui.createHandlerFn(this, function() {
-							const srv = uci.get('mieru', 'main', 'server');
-							let port = uci.get('mieru', 'main', 'port');
+							const srv = (uci.get('mieru', 'main', 'server') || '').trim();
+							let port = (uci.get('mieru', 'main', 'port') || '').trim();
 							if (!srv || !port) {
 								ui.addNotification(null, E('p', _('Please configure server and port first!')));
 								return;
 							}
-							if (index(port, '-') !== -1) {
-								port = split(port, '-')[0];
+							if (port.indexOf('-') !== -1) {
+								port = port.split('-')[0].trim();
 							}
 							clearConsole();
 							logMsg(`TCP Connect ${srv}:${port}...`);
@@ -927,10 +931,12 @@ return view.extend({
 										} else {
 											logMsg(_('ICMP Ping также работает'));
 										}
-									});
+									}).catch(() => {});
 								} else {
 									logMsg(`✗ ` + _('TCP соединение невозможно') + ` (${res.error || _('Timeout')})`);
 								}
+							}).catch(err => {
+								logMsg(_('TCP Connect error: ') + (err.message || err));
 							});
 						})
 					}, _('TCP Connect')),
@@ -1427,38 +1433,42 @@ return view.extend({
 					])
 				]),
 				
-				E('div', { 'class': 'cbi-value', 'style': 'border:none; padding:12px 0 5px 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;' }, [
-					E('div', { 'style': 'display:flex; flex-wrap:wrap; align-items:center; gap:6px;' }, [
+				E('div', { 'class': 'cbi-value', 'style': 'border:none; padding:12px 0 6px 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;' }, [
+					E('div', { 'style': 'display:flex; flex-wrap:wrap; align-items:center; gap:8px;' }, [
 						E('button', {
 							'id': 'mieru_btn_start',
 							'class': 'btn cbi-button-action',
+							'style': 'font-weight:600; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callMieruStart().then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client started.')), 'ok');
 								});
 							})
-						}, _('Start Mieru')),
+						}, [ '▶ ', _('Start Mieru') ]),
 						E('button', {
 							'id': 'mieru_btn_stop',
 							'class': 'btn cbi-button-reset',
+							'style': 'font-weight:600; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callMieruStop().then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client stopped.')), 'info');
 								});
 							})
-						}, _('Stop Mieru')),
+						}, [ '⏹ ', _('Stop Mieru') ]),
 						E('button', {
 							'id': 'mieru_btn_restart',
 							'class': 'btn cbi-button-save',
+							'style': 'font-weight:600; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': ui.createHandlerFn(this, function() {
 								return callMieruRestart().then(() => {
 									ui.addNotification(null, E('p', _('Mieru Client restarted.')), 'ok');
 								});
 							})
-						}, _('Restart Mieru')),
+						}, [ '🔄 ', _('Restart Mieru') ]),
 						E('button', {
 							'id': 'mieru_btn_autostart',
 							'class': autostartData.enabled ? 'btn cbi-button-reset' : 'btn cbi-button-action',
+							'style': 'font-weight:600; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': ui.createHandlerFn(this, function() {
 								const btn = document.getElementById('mieru_btn_autostart');
 								const isEnabled = btn.getAttribute('data-enabled') === 'true';
@@ -1467,46 +1477,36 @@ return view.extend({
 									btn.setAttribute('data-enabled', res.enabled ? 'true' : 'false');
 									if (res.enabled) {
 										btn.className = 'btn cbi-button-reset';
-										btn.innerText = _('Remove from Autostart');
+										btn.innerText = '⚡ ' + _('Remove from Autostart');
 										ui.addNotification(null, E('p', _('Mieru Client added to autostart.')), 'ok');
 									} else {
 										btn.className = 'btn cbi-button-action';
-										btn.innerText = _('Add to Autostart');
+										btn.innerText = '⚡ ' + _('Add to Autostart');
 										ui.addNotification(null, E('p', _('Mieru Client removed from autostart.')), 'ok');
 									}
 								});
 							})
-						}, autostartData.enabled ? _('Remove from Autostart') : _('Add to Autostart')),
+						}, [ '⚡ ', autostartData.enabled ? _('Remove from Autostart') : _('Add to Autostart') ]),
 
-						E('span', { 'style': 'display:inline-block; width:1px; height:20px; background:rgba(128,128,128,0.3); margin:0 4px;' }),
+						E('span', { 'style': 'display:inline-block; width:1px; height:24px; background:rgba(128,128,128,0.25); margin:0 4px;' }),
 
-						// Copy SOCKS5 URL Buttons
+						// Single SOCKS5 Copy button
 						E('button', {
 							'class': 'btn cbi-button-neutral',
+							'style': 'font-weight:500; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': function() {
 								const port = uci.get('mieru', 'main', 'socks5_port') || '1080';
 								const ip = window.location.hostname || '192.168.1.1';
 								const url = `socks5://${ip}:${port}`;
 								copyTextToClipboard(url).then(
-									() => ui.addNotification(null, E('p', _('SOCKS5 URL успешно скопирован')), 'ok'),
+									() => ui.addNotification(null, E('p', _('SOCKS5 URL успешно скопирован: ') + url), 'ok'),
 									() => ui.addNotification(null, E('p', _('Ошибка копирования SOCKS5 URL')), 'error')
 								);
 							}
-						}, _('Copy SOCKS5 URL')),
-						E('button', {
-							'class': 'btn cbi-button-neutral',
-							'click': function() {
-								const port = uci.get('mieru', 'main', 'socks5_port') || '1080';
-								const ip = window.location.hostname || '192.168.1.1';
-								const url = `socks5h://${ip}:${port}`;
-								copyTextToClipboard(url).then(
-									() => ui.addNotification(null, E('p', _('SOCKS5h URL успешно скопирован')), 'ok'),
-									() => ui.addNotification(null, E('p', _('Ошибка копирования SOCKS5h URL')), 'error')
-								);
-							}
-						}, _('Copy SOCKS5h URL')),
+						}, [ '📋 ', _('Copy SOCKS5 URL') ]),
 						E('button', {
 							'class': 'btn cbi-button-action',
+							'style': 'font-weight:500; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': ui.createHandlerFn(this, function() {
 								const ta = E('textarea', { 'style': 'width:100%; height:150px; font-family:monospace;', 'placeholder': _('Paste Mieru URL (mierus://...) or JSON configuration here...') });
 								const checkAutoBk = E('input', { 'type': 'checkbox', 'id': 'quick_modal_import_auto_bk', 'checked': true });
