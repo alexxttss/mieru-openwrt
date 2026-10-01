@@ -107,11 +107,19 @@ const callMieruSetAutostart = rpc.declare({
 	params: ['enable']
 });
 
-// Standard rc service calls
-const callInitAction = rpc.declare({
-	object: 'rc',
-	method: 'init',
-	params: [ 'name', 'action' ]
+const callMieruStart = rpc.declare({
+	object: 'luci.mieru',
+	method: 'startService'
+});
+
+const callMieruStop = rpc.declare({
+	object: 'luci.mieru',
+	method: 'stopService'
+});
+
+const callMieruRestart = rpc.declare({
+	object: 'luci.mieru',
+	method: 'restartService'
 });
 
 // Parse Mieru URL
@@ -139,7 +147,7 @@ function parseMieruUrl(url) {
 		if (hostStr.includes(':') && !hostStr.startsWith('[')) {
 			const hp = hostStr.split(':');
 			server = hp[0];
-			port = parseInt(hp[1], 10);
+			port = hp[1].replace(/[–—−\s]/g, '-').trim();
 		}
 
 		let protocol = 'TCP';
@@ -152,14 +160,14 @@ function parseMieruUrl(url) {
 			if (kv.length === 2) {
 				const k = kv[0].trim();
 				const v = decodeURIComponent(kv[1].trim());
-				if (k === 'port') port = parseInt(v, 10);
+				if (k === 'port') port = v.replace(/[–—−\s]/g, '-').trim();
 				else if (k === 'protocol') protocol = v.toUpperCase();
 				else if (k === 'socks5_port') socks5_port = parseInt(v, 10);
 				else if (k === 'mtu') mtu = parseInt(v, 10);
 			}
 		}
 
-		if (!port || isNaN(port)) return null;
+		if (!port) return null;
 
 		return { server, port, username, password, protocol, socks5_port, mtu };
 	} catch (e) {
@@ -785,6 +793,18 @@ return view.extend({
 
 		o = s.taboption('general', form.Value, 'port', _('Port'), _('Mieru server port or port range (e.g. 2012 or 2012-2022)'));
 		o.rmempty = false;
+		o.validate = function(section_id, value) {
+			if (!value) return _('Port or port range is required');
+			value = ('' + value).replace(/[–—−\s]/g, '-').trim();
+			if (!/^\d+(-\d+)?$/.test(value)) {
+				return _('Invalid port format. Enter a port (e.g. 2012) or port range (e.g. 2012-2022)');
+			}
+			return true;
+		};
+		o.write = function(section_id, formvalue) {
+			const clean = ('' + formvalue).replace(/[–—−\s]/g, '-').trim();
+			return uci.set('mieru', section_id, 'port', clean);
+		};
 
 		o = s.taboption('general', form.Value, 'username', _('Username'), _('Proxy connection username'));
 		o.rmempty = false;
@@ -963,20 +983,26 @@ return view.extend({
 			const chkAutoscroll = E('input', { 'type': 'checkbox', 'id': 'mieru_log_autoscroll', 'checked': true });
 
 			const refreshLogs = function() {
-				// Only fetch logs if the log area is currently visible (Logs tab is active)
-				if (logArea.offsetWidth > 0 && logArea.offsetHeight > 0) {
-					callMieruReadLog().then(res => {
-						logArea.value = res.log || _('No log entries found.');
-						if (chkAutoscroll.checked) {
-							logArea.scrollTop = logArea.scrollHeight;
-						}
-					});
-				}
+				callMieruReadLog().then(res => {
+					logArea.value = res.log || _('No log entries found.');
+					if (chkAutoscroll.checked) {
+						logArea.scrollTop = logArea.scrollHeight;
+					}
+				}).catch(e => {
+					logArea.value = _('Error loading logs: ') + (e.message || e);
+				});
 			};
 
-			// Setup periodic refresh
-			poll.add(refreshLogs, 10);
-			setTimeout(refreshLogs, 200);
+			// Setup periodic refresh and immediate load
+			poll.add(refreshLogs, 5);
+			setTimeout(refreshLogs, 100);
+
+			// Automatically refresh when switching to Logs tab
+			document.addEventListener('click', function(ev) {
+				if (ev.target && (ev.target.getAttribute('data-tab') === 'logs' || ev.target.innerText === _('Logs') || ev.target.innerText === 'Журнал')) {
+					setTimeout(refreshLogs, 50);
+				}
+			});
 
 			return E('div', {}, [
 				logArea,
@@ -985,22 +1011,19 @@ return view.extend({
 						E('button', {
 							'class': 'btn cbi-button-neutral',
 							'style': 'margin-right: 5px;',
-							'click': refreshLogs
+							'click': function(ev) {
+								ev.preventDefault();
+								refreshLogs();
+							}
 						}, _('Refresh')),
 						E('button', {
 							'class': 'btn cbi-button-reset',
 							'style': 'margin-right: 5px;',
-							'click': ui.createHandlerFn(this, function() {
-								if (confirm(_('Clear entire system logs?'))) {
-									callMieruClearLog().then(res => {
-										if (res.success) {
-											logArea.value = '';
-											refreshLogs();
-											ui.addNotification(null, E('p', _('System logs cleared.')));
-										}
-									});
-								}
-							})
+							'click': function(ev) {
+								ev.preventDefault();
+								logArea.value = _('Журнал на экране очищен.');
+								ui.addNotification(null, E('p', _('Журнал очищен.')), 'info');
+							}
 						}, _('Clear Log')),
 						E('button', {
 							'class': 'btn cbi-button-save',
@@ -1410,8 +1433,8 @@ return view.extend({
 							'id': 'mieru_btn_start',
 							'class': 'btn cbi-button-action',
 							'click': ui.createHandlerFn(this, function() {
-								return callInitAction({ name: 'mieru', action: 'start' }).then(() => {
-									ui.addNotification(null, E('p', _('Mieru Client started.')));
+								return callMieruStart().then(() => {
+									ui.addNotification(null, E('p', _('Mieru Client started.')), 'ok');
 								});
 							})
 						}, _('Start Mieru')),
@@ -1419,8 +1442,8 @@ return view.extend({
 							'id': 'mieru_btn_stop',
 							'class': 'btn cbi-button-reset',
 							'click': ui.createHandlerFn(this, function() {
-								return callInitAction({ name: 'mieru', action: 'stop' }).then(() => {
-									ui.addNotification(null, E('p', _('Mieru Client stopped.')));
+								return callMieruStop().then(() => {
+									ui.addNotification(null, E('p', _('Mieru Client stopped.')), 'info');
 								});
 							})
 						}, _('Stop Mieru')),
@@ -1428,8 +1451,8 @@ return view.extend({
 							'id': 'mieru_btn_restart',
 							'class': 'btn cbi-button-save',
 							'click': ui.createHandlerFn(this, function() {
-								return callInitAction({ name: 'mieru', action: 'restart' }).then(() => {
-									ui.addNotification(null, E('p', _('Mieru Client restarted.')));
+								return callMieruRestart().then(() => {
+									ui.addNotification(null, E('p', _('Mieru Client restarted.')), 'ok');
 								});
 							})
 						}, _('Restart Mieru')),
@@ -1439,8 +1462,8 @@ return view.extend({
 							'click': ui.createHandlerFn(this, function() {
 								const btn = document.getElementById('mieru_btn_autostart');
 								const isEnabled = btn.getAttribute('data-enabled') === 'true';
-								const nextState = !isEnabled;
-								return callMieruSetAutostart(nextState).then(res => {
+								const nextParam = isEnabled ? '0' : '1';
+								return callMieruSetAutostart(nextParam).then(res => {
 									btn.setAttribute('data-enabled', res.enabled ? 'true' : 'false');
 									if (res.enabled) {
 										btn.className = 'btn cbi-button-reset';
@@ -1576,8 +1599,8 @@ return view.extend({
 			}
 			
 			return p.then(() => {
-				return callInitAction({ name: 'mieru', action: 'restart' }).then(function() {
-					ui.addNotification(null, E('p', _('Configuration successfully applied.')), 'ok');
+				return callMieruRestart().then(function() {
+					ui.addNotification(null, E('p', _('Configuration successfully applied and Mieru restarted.')), 'ok');
 					// Refresh backups list if backup tab is active
 					const tbody = document.getElementById('mieru_backups_tbody');
 					if (tbody) {

@@ -14,7 +14,7 @@
 		"write": {
 			"ubus": {
 				"uci": [ "set", "commit" ],
-				"luci.mieru": [ "clearLog", "importBackup", "confirmRestore", "deleteBackup", "restoreBackup", "resetConfig", "importJson", "confirmImportJson", "createManualBackup", "setAutostart" ],
+				"luci.mieru": [ "clearLog", "importBackup", "confirmRestore", "deleteBackup", "restoreBackup", "resetConfig", "importJson", "confirmImportJson", "createManualBackup", "setAutostart", "startService", "stopService", "restartService" ],
 				"rc": [ "init" ]
 			},
 			"uci": [ "mieru" ]

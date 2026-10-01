@@ -13,6 +13,7 @@ generate_json_config() {
     
     config_get server "main" "server"
     config_get port "main" "port"
+    port=$(echo "$port" | awk -F"[^0-9]+" '{if ($2) print $1"-"$2; else print $1}')
     config_get username "main" "username"
     config_get password "main" "password"
     config_get protocol "main" "protocol" "TCP"
@@ -85,6 +86,7 @@ start_service() {
     # The loop runs 'mieru start' if the daemon is stopped, and polls its status.
     # If the daemon crashes, the loop exits, and procd automatically respawns it.
     procd_set_param command /bin/sh -c '
+        export HOME=/root
         /usr/bin/mieru start
         while /usr/bin/mieru status >/dev/null 2>&1; do
             sleep 5
@@ -107,8 +109,14 @@ start_service() {
 stop_service() {
     export HOME=/root
     /usr/bin/mieru stop
+    killall mieru-monitor 2>/dev/null
     rm -f "$JSON_FILE"
     rm -f /var/run/mieru_status.json
+}
+
+reload_service() {
+    stop
+    start
 }
 
 service_triggers() {

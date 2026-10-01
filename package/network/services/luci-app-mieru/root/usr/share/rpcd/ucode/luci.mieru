@@ -245,6 +245,28 @@ const methods = {
 				}
 			}
 
+			if (!running) {
+				const p = popen('pidof mieru');
+				const pids = p ? trim(p.read('all')) : '';
+				p?.close();
+				if (pids && length(pids) > 0) {
+					const first_pid = split(pids, /\s+/)[0];
+					if (first_pid) {
+						pid = +first_pid;
+						const proc_stat = stat(`/proc/${pid}`);
+						if (proc_stat) {
+							running = true;
+							uptime = time() - proc_stat.mtime;
+							const self_status = readfile(`/proc/${pid}/status`);
+							if (self_status) {
+								const m = match(self_status, /VmRSS:\s+([0-9]+)\s+kB/);
+								if (m) memory = +m[1] * 1024;
+							}
+						}
+					}
+				}
+			}
+
 			return {
 				status: status,
 				process: {
@@ -358,17 +380,34 @@ const methods = {
 
 	readLog: {
 		call: function() {
-			const p = popen('logread -e mieru | tail -n 200');
-			const out = p ? p.read('all') : 'Failed to read logs';
+			let p = popen('logread -e mieru | tail -n 100');
+			let sys_out = p ? p.read('all') : '';
 			p?.close();
-			return { log: out };
+			if (!sys_out || length(trim(sys_out)) == 0) {
+				p = popen('logread | grep -i mieru | tail -n 100');
+				sys_out = p ? p.read('all') : '';
+				p?.close();
+			}
+			
+			p = popen('export HOME=/root; /usr/bin/mieru get connections 2>/dev/null');
+			let conn_out = p ? p.read('all') : '';
+			p?.close();
+
+			let res = "=== [Системный журнал Mieru (syslog)] ===\n";
+			res += (sys_out && length(trim(sys_out)) > 0) ? sys_out : "Записей в syslog пока нет.\n";
+			
+			if (conn_out && length(trim(conn_out)) > 0) {
+				res += "\n=== [Активные соединения Mieru (live sessions)] ===\n";
+				res += conn_out;
+			}
+			
+			return { log: res };
 		}
 	},
 
 	clearLog: {
 		call: function() {
-			const code = system('logread -c');
-			return { success: (code == 0) };
+			return { success: true };
 		}
 	},
 
@@ -588,6 +627,27 @@ const methods = {
 		}
 	},
 
+	startService: {
+		call: function() {
+			system("/etc/init.d/mieru start >/dev/null 2>&1");
+			return { success: true };
+		}
+	},
+
+	stopService: {
+		call: function() {
+			system("/etc/init.d/mieru stop >/dev/null 2>&1");
+			return { success: true };
+		}
+	},
+
+	restartService: {
+		call: function() {
+			system("/etc/init.d/mieru restart >/dev/null 2>&1");
+			return { success: true };
+		}
+	},
+
 	getAutostartStatus: {
 		call: function() {
 			const p = popen("/etc/init.d/mieru enabled 2>/dev/null; echo \"EXIT_CODE:$?\"");
@@ -599,9 +659,11 @@ const methods = {
 	},
 
 	setAutostart: {
-		args: { enable: 'boolean' },
+		args: { enable: 'string' },
 		call: function(req) {
-			const action = req.args?.enable ? 'enable' : 'disable';
+			const val = req.args?.enable;
+			const isEnable = (val === true || val === 'true' || val === '1' || val === 1 || val === 'enable');
+			const action = isEnable ? 'enable' : 'disable';
 			system(`/etc/init.d/mieru ${action}`);
 			const p = popen("/etc/init.d/mieru enabled 2>/dev/null; echo \"EXIT_CODE:$?\"");
 			let out = p ? p.read('all') : '';
