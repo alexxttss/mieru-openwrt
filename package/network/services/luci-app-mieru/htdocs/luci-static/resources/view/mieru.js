@@ -980,73 +980,134 @@ return view.extend({
 		o = s.taboption('logs', form.DummyValue, '_logs');
 		o.rawhtml = true;
 		o.render = L.bind(function() {
+			const initialHelp = _('Журнал по умолчанию отключён для экономии памяти и ресурсов роутера.\n\nНажмите кнопку «▶ Включить журнал» для запуска непрерывного мониторинга, либо нажмите «🔄 Обновить» для разового просмотра последних событий.');
+			
 			const logArea = E('textarea', {
 				'id': 'syslog_box',
 				'readonly': true,
-				'style': 'width:100%; height:300px; font-family:monospace; background-color:rgba(0,0,0,0.02); border:1px solid rgba(128,128,128,0.2); padding:10px; border-radius:4px; margin-bottom:10px; color:inherit;'
-			}, _('Loading logs...'));
+				'style': 'width:100%; height:320px; font-family:monospace; font-size:12px; line-height:1.4; background-color:rgba(0,0,0,0.02); border:1px solid rgba(128,128,128,0.25); padding:10px; border-radius:4px; margin-bottom:10px; color:inherit;'
+			}, initialHelp);
 
 			const chkAutoscroll = E('input', { 'type': 'checkbox', 'id': 'mieru_log_autoscroll', 'checked': true });
 
-			const refreshLogs = function() {
-				callMieruReadLog().then(res => {
-					logArea.value = res.log || _('No log entries found.');
+			let isLivePolling = false;
+			let liveTimer = null;
+
+			const refreshLogs = function(silent) {
+				if (!silent) {
+					logArea.value = _('Загрузка журнала...');
+				}
+				return callMieruReadLog().then(res => {
+					logArea.value = res.log || _('Записей в журнале не обнаружено.');
 					if (chkAutoscroll.checked) {
 						logArea.scrollTop = logArea.scrollHeight;
 					}
 				}).catch(e => {
-					logArea.value = _('Error loading logs: ') + (e.message || e);
+					logArea.value = _('Ошибка чтения журнала: ') + (e.message || e);
 				});
 			};
 
-			// Setup periodic refresh and immediate load
-			poll.add(refreshLogs, 5);
-			setTimeout(refreshLogs, 100);
-
-			// Automatically refresh when switching to Logs tab
-			document.addEventListener('click', function(ev) {
-				if (ev.target && (ev.target.getAttribute('data-tab') === 'logs' || ev.target.innerText === _('Logs') || ev.target.innerText === 'Журнал')) {
-					setTimeout(refreshLogs, 50);
+			const stopLive = function() {
+				isLivePolling = false;
+				if (liveTimer) {
+					clearTimeout(liveTimer);
+					liveTimer = null;
 				}
-			});
+				btnToggleLive.className = 'btn cbi-button-action';
+				btnToggleLive.innerText = '▶ ' + _('Включить журнал');
+				statusBadge.innerText = _('⏸ Мониторинг отключён');
+				statusBadge.style.color = 'rgba(128,128,128,0.7)';
+			};
+
+			const runLiveLoop = function() {
+				if (!isLivePolling) return;
+				refreshLogs(true).finally(() => {
+					if (isLivePolling) {
+						liveTimer = setTimeout(runLiveLoop, 5000);
+					}
+				});
+			};
+
+			const startLive = function() {
+				isLivePolling = true;
+				btnToggleLive.className = 'btn cbi-button-reset';
+				btnToggleLive.innerText = '⏸ ' + _('Остановить журнал');
+				statusBadge.innerText = _('● Мониторинг активен (каждые 5 сек)');
+				statusBadge.style.color = '#2ecc71';
+				runLiveLoop();
+			};
+
+			const btnToggleLive = E('button', {
+				'id': 'mieru_btn_toggle_log',
+				'class': 'btn cbi-button-action',
+				'style': 'font-weight:600; padding:6px 12px; border-radius:4px; margin-right:6px; display:inline-flex; align-items:center; gap:4px;',
+				'click': function(ev) {
+					ev.preventDefault();
+					if (isLivePolling) {
+						stopLive();
+						ui.addNotification(null, E('p', _('Мониторинг журнала остановлен.')), 'info');
+					} else {
+						startLive();
+						ui.addNotification(null, E('p', _('Мониторинг журнала запущен (обновление каждые 5 сек).')), 'ok');
+					}
+				}
+			}, [ '▶ ', _('Включить журнал') ]);
+
+			const btnRefresh = E('button', {
+				'class': 'btn cbi-button-neutral',
+				'style': 'font-weight:500; padding:6px 12px; border-radius:4px; margin-right:6px; display:inline-flex; align-items:center; gap:4px;',
+				'click': function(ev) {
+					ev.preventDefault();
+					refreshLogs(false).then(() => {
+						ui.addNotification(null, E('p', _('Журнал обновлен.')), 'ok');
+					});
+				}
+			}, [ '🔄 ', _('Refresh') ]);
+
+			const btnClear = E('button', {
+				'class': 'btn cbi-button-neutral',
+				'style': 'font-weight:500; padding:6px 12px; border-radius:4px; margin-right:6px; display:inline-flex; align-items:center; gap:4px;',
+				'click': function(ev) {
+					ev.preventDefault();
+					logArea.value = _('Журнал на экране очищен.\n\nНажмите «Включить журнал» или «Обновить» для получения новых записей.');
+					ui.addNotification(null, E('p', _('Экран журнала очищен.')), 'info');
+				}
+			}, [ '🗑 ', _('Clear Log') ]);
+
+			const btnDownload = E('button', {
+				'class': 'btn cbi-button-save',
+				'style': 'font-weight:500; padding:6px 12px; border-radius:4px; display:inline-flex; align-items:center; gap:4px;',
+				'click': function(ev) {
+					ev.preventDefault();
+					const blob = new Blob([logArea.value], { type: 'text/plain;charset=utf-8' });
+					const link = E('a', {
+						'href': URL.createObjectURL(blob),
+						'download': `mieru_log_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'_')}.txt`
+					});
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+				}
+			}, [ '💾 ', _('Download Log') ]);
+
+			const statusBadge = E('span', {
+				'style': 'font-size:12px; font-weight:600; color:rgba(128,128,128,0.7);'
+			}, _('⏸ Мониторинг отключён'));
 
 			return E('div', {}, [
 				logArea,
-				E('div', { 'style': 'display:flex; align-items:center; justify-content:space-between;' }, [
-					E('div', {}, [
-						E('button', {
-							'class': 'btn cbi-button-neutral',
-							'style': 'margin-right: 5px;',
-							'click': function(ev) {
-								ev.preventDefault();
-								refreshLogs();
-							}
-						}, _('Refresh')),
-						E('button', {
-							'class': 'btn cbi-button-reset',
-							'style': 'margin-right: 5px;',
-							'click': function(ev) {
-								ev.preventDefault();
-								logArea.value = _('Журнал на экране очищен.');
-								ui.addNotification(null, E('p', _('Журнал очищен.')), 'info');
-							}
-						}, _('Clear Log')),
-						E('button', {
-							'class': 'btn cbi-button-save',
-							'click': function() {
-								const blob = new Blob([logArea.value], { type: 'text/plain' });
-								const link = E('a', {
-									'href': URL.createObjectURL(blob),
-									'download': 'mieru_syslog.txt'
-								});
-								document.body.appendChild(link);
-								link.click();
-								document.body.removeChild(link);
-							}
-						}, _('Download Log'))
+				E('div', { 'style': 'display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:8px;' }, [
+					E('div', { 'style': 'display:flex; flex-wrap:wrap; align-items:center; gap:4px;' }, [
+						btnToggleLive,
+						btnRefresh,
+						btnClear,
+						btnDownload
 					]),
-					E('label', { 'style': 'font-size:12px; opacity:0.7;' }, [
-						chkAutoscroll, ' ', _('Auto-scroll')
+					E('div', { 'style': 'display:flex; align-items:center; gap:12px;' }, [
+						statusBadge,
+						E('label', { 'style': 'font-size:12px; opacity:0.8; display:flex; align-items:center; gap:4px;' }, [
+							chkAutoscroll, ' ', _('Auto-scroll')
+						])
 					])
 				])
 			]);
