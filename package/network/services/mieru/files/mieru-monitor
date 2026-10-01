@@ -15,9 +15,9 @@ function get_config() {
 	const socks5_port = uci.get("mieru", "main", "socks5_port") ?? "1080";
 	const monitor_interval = +(uci.get("mieru", "main", "monitor_interval") ?? "10");
 	
-	let test_port = port;
-	if (port && index(port, '-') != -1) {
-		test_port = split(port, '-')[0];
+	let test_port = replace(port ?? '', /[–—−\s]/g, '-');
+	if (index(test_port, '-') != -1) {
+		test_port = split(test_port, '-')[0];
 	}
 	
 	return { enabled, server, port: test_port, socks5_port, monitor_interval };

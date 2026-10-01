@@ -34,7 +34,8 @@ const callMieruValidate = rpc.declare({
 
 const callMieruTestSocks = rpc.declare({
 	object: 'luci.mieru',
-	method: 'testSocks5'
+	method: 'testSocks5',
+	params: ['port']
 });
 
 const callMieruReadLog = rpc.declare({
@@ -55,12 +56,14 @@ const callMieruExportBackup = rpc.declare({
 
 const callMieruImportBackup = rpc.declare({
 	object: 'luci.mieru',
-	method: 'importBackup'
+	method: 'importBackup',
+	params: ['data', 'comment']
 });
 
 const callMieruConfirmRestore = rpc.declare({
 	object: 'luci.mieru',
-	method: 'confirmRestore'
+	method: 'confirmRestore',
+	params: ['auto_backup']
 });
 
 const callMieruGetBackups = rpc.declare({
@@ -70,12 +73,14 @@ const callMieruGetBackups = rpc.declare({
 
 const callMieruDeleteBackup = rpc.declare({
 	object: 'luci.mieru',
-	method: 'deleteBackup'
+	method: 'deleteBackup',
+	params: ['timestamp']
 });
 
 const callMieruRestoreBackup = rpc.declare({
 	object: 'luci.mieru',
-	method: 'restoreBackup'
+	method: 'restoreBackup',
+	params: ['timestamp', 'auto_backup']
 });
 
 const callMieruResetConfig = rpc.declare({
@@ -85,17 +90,20 @@ const callMieruResetConfig = rpc.declare({
 
 const callMieruImportJson = rpc.declare({
 	object: 'luci.mieru',
-	method: 'importJson'
+	method: 'importJson',
+	params: ['content']
 });
 
 const callMieruConfirmImportJson = rpc.declare({
 	object: 'luci.mieru',
-	method: 'confirmImportJson'
+	method: 'confirmImportJson',
+	params: ['auto_backup']
 });
 
 const callMieruCreateManualBackup = rpc.declare({
 	object: 'luci.mieru',
-	method: 'createManualBackup'
+	method: 'createManualBackup',
+	params: ['comment']
 });
 
 const callMieruGetAutostartStatus = rpc.declare({
@@ -124,54 +132,106 @@ const callMieruRestart = rpc.declare({
 	method: 'restartService'
 });
 
-// Parse Mieru URL
+// Parse Mieru URL (supports mierus://, mieru://, base64 payloads, #fragments, IPv6, port ranges)
 function parseMieruUrl(url) {
 	url = (url || '').trim();
+	if (url.startsWith('"') && url.endsWith('"')) url = url.slice(1, -1).trim();
+	if (url.startsWith("'") && url.endsWith("'")) url = url.slice(1, -1).trim();
+
+	// Strip fragment / comment (#...)
+	const hashIdx = url.indexOf('#');
+	let remark = '';
+	if (hashIdx !== -1) {
+		remark = decodeURIComponent(url.substring(hashIdx + 1).trim());
+		url = url.substring(0, hashIdx).trim();
+	}
+
 	if (!url.startsWith('mieru://') && !url.startsWith('mierus://')) return null;
 
 	try {
+		// Check for Base64 encoded URL body (e.g. mierus://<base64>)
+		const schemeSep = url.indexOf('://');
+		const body = url.substring(schemeSep + 3);
+		if (!body.includes('?') && !body.includes('@') && body.length > 8) {
+			try {
+				let padded = body;
+				while (padded.length % 4 !== 0) padded += '=';
+				const decoded = atob(padded);
+				if (decoded && (decoded.includes('@') || decoded.includes(':'))) {
+					url = 'mierus://' + decoded;
+				}
+			} catch (e) {}
+		}
+
 		const parts = url.split('?');
-		let base = parts[0];
+		let base = parts[0].replace(/\/+$/, '');
 		const query = parts[1] || '';
 
-		// Strip trailing slashes
-		base = base.replace(/\/+$/, '');
+		const sepIdx = base.indexOf('://');
+		if (sepIdx === -1) return null;
+		const rest = base.substring(sepIdx + 3);
 
-		const m = base.match(/^mierus?:\/\/([^:]+):([^@]+)@([^\/]+)$/);
-		if (!m) return null;
+		let username = '';
+		let password = '';
+		let hostStr = rest;
 
-		let username = decodeURIComponent(m[1]);
-		let password = decodeURIComponent(m[2]);
-		let hostStr = m[3];
+		const lastAt = rest.lastIndexOf('@');
+		if (lastAt !== -1) {
+			const auth = rest.substring(0, lastAt);
+			hostStr = rest.substring(lastAt + 1);
+			const firstColon = auth.indexOf(':');
+			if (firstColon !== -1) {
+				username = decodeURIComponent(auth.substring(0, firstColon));
+				password = decodeURIComponent(auth.substring(firstColon + 1));
+			} else {
+				username = decodeURIComponent(auth);
+			}
+		}
+
 		let server = hostStr;
 		let port = null;
 
-		if (hostStr.includes(':') && !hostStr.startsWith('[')) {
+		if (hostStr.startsWith('[')) {
+			const cb = hostStr.indexOf(']');
+			if (cb !== -1) {
+				server = hostStr.substring(1, cb);
+				const rh = hostStr.substring(cb + 1);
+				if (rh.startsWith(':')) {
+					port = rh.substring(1);
+				}
+			}
+		} else if (hostStr.includes(':')) {
 			const hp = hostStr.split(':');
 			server = hp[0];
-			port = hp[1].replace(/[–—−\s]/g, '-').trim();
+			port = hp.slice(1).join(':');
 		}
 
 		let protocol = 'TCP';
 		let socks5_port = 1080;
 		let mtu = 1400;
 
-		const pairs = query.split('&');
-		for (let i = 0; i < pairs.length; i++) {
-			const kv = pairs[i].split('=');
-			if (kv.length === 2) {
-				const k = kv[0].trim();
-				const v = decodeURIComponent(kv[1].trim());
-				if (k === 'port') port = v.replace(/[–—−\s]/g, '-').trim();
-				else if (k === 'protocol') protocol = v.toUpperCase();
-				else if (k === 'socks5_port') socks5_port = parseInt(v, 10);
-				else if (k === 'mtu') mtu = parseInt(v, 10);
+		if (query) {
+			const pairs = query.split('&');
+			for (let i = 0; i < pairs.length; i++) {
+				const eq = pairs[i].indexOf('=');
+				if (eq !== -1) {
+					const k = pairs[i].substring(0, eq).trim();
+					const v = decodeURIComponent(pairs[i].substring(eq + 1).trim());
+					if (k === 'port') port = v;
+					else if (k === 'protocol') protocol = v.toUpperCase();
+					else if (k === 'socks5_port') socks5_port = parseInt(v, 10) || 1080;
+					else if (k === 'mtu') mtu = parseInt(v, 10) || 1400;
+				}
 			}
 		}
 
-		if (!port) return null;
+		if (port) {
+			port = ('' + port).replace(/[–—−\s]/g, '-').trim();
+		}
 
-		return { server, port, username, password, protocol, socks5_port, mtu };
+		if (!port || !server) return null;
+
+		return { server, port, username, password, protocol, socks5_port, mtu, remark };
 	} catch (e) {
 		return null;
 	}
@@ -214,7 +274,9 @@ function applyParsedConfigToForm(parsed) {
 				   document.getElementById(`cbid.mieru.main.${key}`);
 		
 		if (el) {
-			if (el.type === 'checkbox') {
+			if (typeof el.setValue === 'function') {
+				el.setValue(val);
+			} else if (el.type === 'checkbox') {
 				el.checked = (val === '1' || val === true);
 			} else {
 				el.value = val;
@@ -348,18 +410,18 @@ function drawSparkline(canvas, history) {
 }
 
 function formatSize(bytes) {
-	if (bytes === 0 || !bytes) return '0 Б';
+	if (!bytes || bytes <= 0) return '0 Б';
 	const k = 1024;
-	const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	const sizes = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+	const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
 	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 function formatSpeed(bytes_per_sec) {
-	if (bytes_per_sec === 0 || !bytes_per_sec) return '0 Б/с';
+	if (!bytes_per_sec || bytes_per_sec <= 0) return '0 Б/с';
 	const k = 1024;
-	const sizes = ['Б/с', 'КБ/с', 'МБ/с', 'ГБ/с'];
-	const i = Math.floor(Math.log(bytes_per_sec) / Math.log(k));
+	const sizes = ['Б/с', 'КБ/с', 'МБ/с', 'ГБ/с', 'ТБ/с'];
+	const i = Math.min(Math.floor(Math.log(bytes_per_sec) / Math.log(k)), sizes.length - 1);
 	return parseFloat((bytes_per_sec / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
@@ -427,9 +489,9 @@ return view.extend({
 
 	load: function() {
 		return Promise.all([
-			uci.load('mieru'),
-			callMieruGetBackups(),
-			callMieruGetAutostartStatus()
+			uci.load('mieru').catch(() => null),
+			callMieruGetBackups().catch(() => ({ backups: [] })),
+			callMieruGetAutostartStatus().catch(() => ({ enabled: false }))
 		]);
 	},
 
@@ -759,22 +821,55 @@ return view.extend({
 				'style': 'white-space: nowrap;',
 				'click': ui.createHandlerFn(this, function(ev) {
 					ev.preventDefault();
-					const urlVal = urlInput.value.trim();
-					if (!urlVal) {
+					const rawVal = urlInput.value.trim();
+					if (!rawVal) {
 						showInlineImportStatus(_('Вставьте ссылку Mieru!'), false);
 						return;
 					}
-					const parsed = parseMieruUrl(urlVal);
+
+					// If user pasted JSON directly into URL box
+					if (rawVal.startsWith('{')) {
+						callMieruImportJson(rawVal).then(L.bind(function(res) {
+							if (res.error) {
+								showInlineImportStatus(_('Ошибка JSON: ') + res.error, false);
+								return;
+							}
+							this.showImportPreview(res.preview, function(autoBk) {
+								callMieruConfirmImportJson(autoBk).then(confirmRes => {
+									if (confirmRes.success) {
+										ui.addNotification(null, E('p', _('Конфигурация успешно импортирована.')), 'ok');
+										setTimeout(() => location.reload(), 1500);
+									}
+								});
+							});
+						}, this));
+						return;
+					}
+
+					const parsed = parseMieruUrl(rawVal);
 					if (parsed) {
 						applyParsedConfigToForm(parsed);
 						urlInput.value = '';
 						showInlineImportStatus(_('Ссылка применена! Перезапуск службы...'), true);
-						ui.changes.apply();
+						ui.changes.apply().then(function() {
+							return callMieruRestart();
+						}).then(function() {
+							ui.addNotification(null, E('p', _('Mieru успешно запущен с новыми параметрами!')), 'ok');
+						}).catch(function(e) {
+							ui.addNotification(null, E('p', _('Ошибка перезапуска службы: ') + (e.message || e)), 'error');
+						});
 					} else {
 						showInlineImportStatus(_('Неверный формат ссылки Mieru'), false);
 					}
 				})
 			}, _('Import URL'));
+
+			urlInput.addEventListener('keydown', function(ev) {
+				if (ev.key === 'Enter') {
+					ev.preventDefault();
+					applyBtn.click();
+				}
+			});
 
 			return E('div', { 'class': 'cbi-value', 'style': 'background: rgba(0, 128, 255, 0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(0, 128, 255, 0.2); margin-bottom: 15px;' }, [
 				E('label', { 'class': 'cbi-value-title', 'style': 'font-weight: bold; color: #0072c6;' }, _('Import from Link:')),
@@ -881,7 +976,8 @@ return view.extend({
 						'class': 'btn cbi-button-action',
 						'style': 'margin-right: 5px;',
 						'click': ui.createHandlerFn(this, function() {
-							const srv = (uci.get('mieru', 'main', 'server') || '').trim();
+							const srvEl = document.querySelector('[name="cbid.mieru.main.server"]');
+							const srv = (srvEl ? srvEl.value : uci.get('mieru', 'main', 'server') || '').trim();
 							if (!srv) {
 								ui.addNotification(null, E('p', _('Please configure server IP first!')));
 								return;
@@ -906,8 +1002,10 @@ return view.extend({
 						'class': 'btn cbi-button-action',
 						'style': 'margin-right: 5px;',
 						'click': ui.createHandlerFn(this, function() {
-							const srv = (uci.get('mieru', 'main', 'server') || '').trim();
-							let port = (uci.get('mieru', 'main', 'port') || '').trim();
+							const srvEl = document.querySelector('[name="cbid.mieru.main.server"]');
+							const srv = (srvEl ? srvEl.value : uci.get('mieru', 'main', 'server') || '').trim();
+							const portEl = document.querySelector('[name="cbid.mieru.main.port"]');
+							let port = (portEl ? portEl.value : uci.get('mieru', 'main', 'port') || '').trim();
 							if (!srv || !port) {
 								ui.addNotification(null, E('p', _('Please configure server and port first!')));
 								return;
@@ -962,7 +1060,8 @@ return view.extend({
 						'class': 'btn cbi-button-action',
 						'style': 'margin-right: 5px;',
 						'click': ui.createHandlerFn(this, function() {
-							const p = uci.get('mieru', 'main', 'socks5_port') || '1080';
+							const pEl = document.querySelector('[name="cbid.mieru.main.socks5_port"]');
+							const p = (pEl ? pEl.value : uci.get('mieru', 'main', 'socks5_port') || '1080').trim();
 							clearConsole();
 							logMsg(`Testing local SOCKS5 proxy on port ${p}...`);
 							callMieruTestSocks(p).then(res => {
@@ -1529,6 +1628,7 @@ return view.extend({
 						E('button', {
 							'id': 'mieru_btn_autostart',
 							'class': autostartData.enabled ? 'btn cbi-button-reset' : 'btn cbi-button-action',
+							'data-enabled': autostartData.enabled ? 'true' : 'false',
 							'style': 'font-weight:600; padding:6px 14px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;',
 							'click': ui.createHandlerFn(this, function() {
 								const btn = document.getElementById('mieru_btn_autostart');
@@ -1594,7 +1694,13 @@ return view.extend({
 												if (parsed) {
 													applyParsedConfigToForm(parsed);
 													ui.addNotification(null, E('p', _('✓ Ссылка распарсена и применена! Перезапуск службы...')), 'ok');
-													ui.changes.apply();
+													ui.changes.apply().then(function() {
+														return callMieruRestart();
+													}).then(function() {
+														ui.addNotification(null, E('p', _('Mieru успешно запущен с новыми параметрами!')), 'ok');
+													}).catch(function(e) {
+														ui.addNotification(null, E('p', _('Ошибка перезапуска: ') + (e.message || e)), 'error');
+													});
 													return;
 												}
 												callMieruImportJson(contents).then(res => {
@@ -1660,6 +1766,8 @@ return view.extend({
 			}
 			
 			return p.then(() => {
+				return ui.changes.apply(mode);
+			}).then(() => {
 				return callMieruRestart().then(function() {
 					ui.addNotification(null, E('p', _('Configuration successfully applied and Mieru restarted.')), 'ok');
 					// Refresh backups list if backup tab is active

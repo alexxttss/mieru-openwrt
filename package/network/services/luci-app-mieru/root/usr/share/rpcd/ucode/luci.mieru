@@ -123,18 +123,58 @@ function create_backup(comment) {
 
 
 function parse_mieru_url(url) {
+	url = trim(url ?? '');
+	if (match(url, /^"/) && match(url, /"$/)) url = substr(url, 1, length(url) - 2);
+	if (match(url, /^'/) && match(url, /'$/)) url = substr(url, 1, length(url) - 2);
+	
+	const hash_idx = index(url, '#');
+	if (hash_idx != -1) {
+		url = substr(url, 0, hash_idx);
+	}
+	
 	const parts = split(url, '?');
-	const base = parts[0];
+	const base = rtrim(parts[0], '/');
 	const query = parts[1] ?? '';
 	
-	const m = match(base, /^mierus?:\/\/([^:]+):([^@]+)@([^\/]+)$/);
-	if (!m) return { error: "Invalid Mieru URL format" };
+	const sep_idx = index(base, '://');
+	if (sep_idx == -1) return { error: "Invalid Mieru URL scheme" };
+	const rest = substr(base, sep_idx + 3);
 	
-	const username = m[1];
-	const password = m[2];
-	const server = m[3];
+	let username = '';
+	let password = '';
+	let host_str = rest;
 	
+	const at_idx = rindex(rest, '@');
+	if (at_idx != -1) {
+		const auth = substr(rest, 0, at_idx);
+		host_str = substr(rest, at_idx + 1);
+		const colon_idx = index(auth, ':');
+		if (colon_idx != -1) {
+			username = substr(auth, 0, colon_idx);
+			password = substr(auth, colon_idx + 1);
+		} else {
+			username = auth;
+		}
+	}
+	
+	let server = host_str;
 	let port = null;
+	
+	if (match(host_str, /^\[/)) {
+		const cb = index(host_str, ']');
+		if (cb != -1) {
+			server = substr(host_str, 1, cb - 1);
+			const rh = substr(host_str, cb + 1);
+			if (rh && match(rh, /^:/)) {
+				port = substr(rh, 1);
+			}
+		}
+	} else if (index(host_str, ':') != -1) {
+		const hp = split(host_str, ':');
+		server = hp[0];
+		port = hp[1];
+	}
+	
 	let protocol = 'TCP';
 	let socks5_port = 1080;
 	let mtu = 1400;
@@ -145,15 +185,19 @@ function parse_mieru_url(url) {
 		if (length(kv) == 2) {
 			const k = trim(kv[0]);
 			const v = trim(kv[1]);
-			if (k == 'port') port = +v;
-			else if (k == 'protocol') protocol = v;
+			if (k == 'port') port = v;
+			else if (k == 'protocol') protocol = uc(v);
 			else if (k == 'socks5_port') socks5_port = +v;
 			else if (k == 'mtu') mtu = +v;
 		}
 	}
 	
-	if (!port) {
-		return { error: "Port query parameter is missing in URL" };
+	if (port) {
+		port = replace(port, /[–—−\s]/g, '-');
+	}
+	
+	if (!port || !server) {
+		return { error: "Server address or port is missing in URL" };
 	}
 	
 	return { server, port, username, password, protocol, socks5_port, mtu };
@@ -161,6 +205,9 @@ function parse_mieru_url(url) {
 
 function parse_json_config(content) {
 	content = trim(content ?? '');
+	if (match(content, /^"/) && match(content, /"$/)) content = substr(content, 1, length(content) - 2);
+	if (match(content, /^'/) && match(content, /'$/)) content = substr(content, 1, length(content) - 2);
+	
 	if (match(content, /^mierus?:\/\//)) {
 		return parse_mieru_url(content);
 	}
@@ -188,8 +235,9 @@ function parse_json_config(content) {
 			const srv = prof.servers[0];
 			server = srv.ipAddress;
 			if (srv.portBindings && length(srv.portBindings) > 0) {
-				port = srv.portBindings[0].port;
-				protocol = srv.portBindings[0].protocol ?? 'TCP';
+				const pb = srv.portBindings[0];
+				port = pb.port ?? pb.portRange;
+				protocol = pb.protocol ?? 'TCP';
 			}
 		}
 	}
@@ -198,13 +246,17 @@ function parse_json_config(content) {
 		for (let ob in parsed.outbounds) {
 			if (ob.type == 'mieru') {
 				server = ob.server;
-				port = ob.server_port;
+				port = ob.server_port ?? ob.server_port_range;
 				username = ob.username;
 				password = ob.password;
 				protocol = ob.transport ?? 'TCP';
 				break;
 			}
 		}
+	}
+	
+	if (port) {
+		port = replace(port, /[–—−\s]/g, '-');
 	}
 	
 	if (!server || !port || !username || !password) {

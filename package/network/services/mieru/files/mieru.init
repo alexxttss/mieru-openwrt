@@ -13,7 +13,7 @@ generate_json_config() {
     
     config_get server "main" "server"
     config_get port "main" "port"
-    port=$(echo "$port" | awk -F"[^0-9]+" '{if ($2) print $1"-"$2; else print $1}')
+    port=$(echo "$port" | awk '{gsub(/[^0-9]+/, " "); if ($2) print $1"-"$2; else print $1}')
     config_get username "main" "username"
     config_get password "main" "password"
     config_get protocol "main" "protocol" "TCP"

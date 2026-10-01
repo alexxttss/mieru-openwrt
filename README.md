@@ -46,7 +46,7 @@ wget -qO- https://raw.githubusercontent.com/alexxttss/mieru-openwrt/main/update.
 
 - `packages/` — директория с готовыми скомпилированными APK-пакетами:
   - `mieru-3.34.1-r1.apk` — основной бинарный файл клиента Mieru и служба procd.
-  - `luci-app-mieru-0.261001.67192.apk` — плагин веб-интерфейса LuCI (написан на JS/ucode, с поддержкой импорта ссылок `mierus://`).
+  - `luci-app-mieru-0.261001.70698.apk` — плагин веб-интерфейса LuCI (написан на JS/ucode, с поддержкой импорта ссылок `mierus://`).
   - `luci-i18n-mieru-ru-0.260816.26603.apk` — русская локализация для веб-интерфейса.
 - `package/` — исходный код структуры пакетов OpenWrt (для сборки в SDK):
   - `package/network/services/mieru/` — Makefile сборки клиента, UCI-конфиг, procd init-скрипт и ucode-монитор трафика/пинга.
