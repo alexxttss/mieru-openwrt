@@ -60,6 +60,11 @@ echo "Installing packages via apk manager..."
 # apk add will automatically pull dependencies (like ucode, rpcd) from standard OpenWrt repos
 apk add --allow-untrusted "$APK_MIERU" "$APK_LUCI" "$APK_LANG"
 
+echo "Applying latest optimized service scripts..."
+wget -q --no-check-certificate "https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/package/network/services/mieru/files/mieru.init" -O /etc/init.d/mieru
+wget -q --no-check-certificate "https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/package/network/services/mieru/files/mieru-monitor" -O /usr/bin/mieru-monitor
+chmod +x /etc/init.d/mieru /usr/bin/mieru-monitor
+
 echo "Cleaning up temporary files..."
 rm -f "$APK_MIERU" "$APK_LUCI" "$APK_LANG"
 cd /
