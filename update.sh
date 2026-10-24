@@ -38,6 +38,7 @@ wget -q --no-check-certificate "${RAW_BASE}/package/network/services/luci-app-mi
 wget -q --no-check-certificate "${RAW_BASE}/package/network/services/luci-app-mieru/root/usr/share/rpcd/acl.d/luci-app-mieru.json" -O /usr/share/rpcd/acl.d/luci-app-mieru.json || { echo "Error downloading luci-app-mieru.json"; exit 1; }
 wget -q --no-check-certificate "${RAW_BASE}/package/network/services/luci-app-mieru/root/usr/share/luci/menu.d/luci-app-mieru.json" -O /usr/share/luci/menu.d/luci-app-mieru.json 2>/dev/null || true
 wget -q --no-check-certificate "${RAW_BASE}/package/network/services/mieru/files/mieru.init" -O /etc/init.d/mieru || { echo "Error downloading mieru.init"; exit 1; }
+wget -q --no-check-certificate "${RAW_BASE}/package/network/services/mieru/files/mieru-monitor" -O /usr/bin/mieru-monitor || { echo "Error downloading mieru-monitor"; exit 1; }
 
 # Fix permissions
 chmod +x /etc/init.d/mieru
