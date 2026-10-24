@@ -82,16 +82,9 @@ start_service() {
     procd_open_instance "daemon"
     procd_set_param env HOME=/root
     
-    # We use a monitoring loop because 'mieru start' daemonizes the process in the background.
-    # The loop runs 'mieru start' if the daemon is stopped, and polls its status.
-    # If the daemon crashes, the loop exits, and procd automatically respawns it.
-    procd_set_param command /bin/sh -c '
-        export HOME=/root
-        /usr/bin/mieru start
-        while /usr/bin/mieru status >/dev/null 2>&1; do
-            sleep 5
-        done
-    '
+    # Direct foreground execution under procd supervision
+    procd_set_param env HOME=/root MIERU_CONFIG_JSON_FILE="$JSON_FILE"
+    procd_set_param command /usr/bin/mieru run
     procd_set_param respawn
     procd_set_param stdout 1
     procd_set_param stderr 1
